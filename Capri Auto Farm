@@ -1,0 +1,1233 @@
+-- Capri Farm Standalone UI: 2 Tab (Farm & Setting) + Visual Hitbox + Lưu Setting + Auto V4 + Fast Attack
+
+getgenv().Config = getgenv().Config or {
+    AutoBounty = true,
+    AutoEnablePVP = true,
+    AutoFlee = false,
+    AutoFleeHP = 30,
+    AutoHaki = true,
+    AutoKen = true,
+    AutoLoadConfig = true,
+    AutoSaveConfig = true,
+    AutoSoru = false,
+    AutoV3 = true,
+    AutoV4 = false,
+    ConfigVersion = 2,
+    Dragonstorm = false,
+    ESP = true,
+    ESP_FontSize = 16,
+    ESP_ShowDistance = true,
+    ESP_ShowHealth = true,
+    ESP_ShowLevel = false,
+    ESP_ShowName = false,
+    ESP_ShowPVP = true,
+    FPSBoost = false,
+    FastAttack = false,
+    FruitM1 = true,
+    FruitSkills = {
+        "C",
+        "V",
+        "X",
+        "Z",
+    },
+    GunSkills = {
+        "X",
+        "Z",
+    },
+    Hold = {
+        ["Blox Fruit"] = {
+            C = 0.1,
+            F = 0.1,
+            V = 0.1,
+            X = 0.1,
+            Z = 0.1,
+        },
+        Gun = {
+            C = 0.1,
+            F = 0.1,
+            V = 0.1,
+            X = 0.1,
+            Z = 0.1,
+        },
+        Melee = {
+            C = 0.1,
+            F = 0.1,
+            V = 0.1,
+            X = 0.1,
+            Z = 0.1,
+        },
+        Sword = {
+            C = 0.1,
+            F = 0.1,
+            V = 0.1,
+            X = 0.1,
+            Z = 0.1,
+        },
+    },
+    HoldWeapon = "Melee",
+    HopBountyRange = "> 25M",
+    HopPlayerRange = "9-12",
+    LockTime = 90,
+    MaxStaySeconds = 600,
+    MeleeSkills = {
+        "C",
+        "X",
+        "Z",
+    },
+    SelectTeam = "Pirates",
+    ServerRegion = "Singapore",
+    SwordSkills = {
+        "X",
+        "Z",
+    },
+    V4Only = {
+        ["Blox Fruit"] = false,
+        Gun = true,
+        Melee = false,
+        Sword = true,
+    },
+    VoidFruitM1 = false,
+    WaterWalk = false,
+}
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Chạy kèm Fast Attack khi khởi động Capri Farm
+task.spawn(function()
+    local ok, err = pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/CapriRauMa/Capri/refs/heads/main/Fast%20attack"))()
+    end)
+    if not ok then
+        warn("Không tải được Fast attack:", err)
+    end
+end)
+
+-- Anti-AFK
+pcall(function()
+    LocalPlayer.Idled:Connect(function()
+        VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        task.wait(0.4)
+        VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+    end)
+end)
+
+-- Biến cấu hình
+local Config = {
+    WeaponType = "Melee",
+    SelectedMob = nil,
+    AutoSelected = false,
+    AutoNear = false,
+    AutoV4 = false,
+    BringEnabled = true,
+    BringMode = "Mixed / All", -- "Mixed / All" hoặc "Same Name"
+    BringRange = 350,
+    NearRange = 700,
+    FarmHeight = 24,
+    TweenSpeed = 350,
+    VisualHitbox = true
+}
+
+local SETTINGS_FILE = "CapriFarm_Settings.json"
+
+local function SaveSettings()
+    local payload = {
+        WeaponType = Config.WeaponType,
+        BringEnabled = Config.BringEnabled,
+        BringMode = Config.BringMode,
+        BringRange = Config.BringRange,
+        NearRange = Config.NearRange,
+        FarmHeight = Config.FarmHeight,
+        TweenSpeed = Config.TweenSpeed,
+        AutoV4 = Config.AutoV4,
+        VisualHitbox = Config.VisualHitbox
+    }
+
+    getgenv().CapriFarmSavedSettings = payload
+    getgenv().Config.AutoV4 = Config.AutoV4
+    getgenv().Config.HoldWeapon = Config.WeaponType
+
+    if type(writefile) == "function" then
+        local ok = pcall(function()
+            writefile(SETTINGS_FILE, HttpService:JSONEncode(payload))
+        end)
+        return ok
+    end
+    return true
+end
+
+local function LoadSettings()
+    local loaded = nil
+
+    if type(isfile) == "function" and type(readfile) == "function" then
+        pcall(function()
+            if isfile(SETTINGS_FILE) then
+                local raw = readfile(SETTINGS_FILE)
+                if raw and raw ~= "" then
+                    loaded = HttpService:JSONDecode(raw)
+                end
+            end
+        end)
+    end
+
+    if type(loaded) ~= "table" and type(getgenv().CapriFarmSavedSettings) == "table" then
+        loaded = getgenv().CapriFarmSavedSettings
+    end
+
+    if type(loaded) == "table" then
+        if type(loaded.WeaponType) == "string" then Config.WeaponType = loaded.WeaponType end
+        if type(loaded.BringEnabled) == "boolean" then Config.BringEnabled = loaded.BringEnabled end
+        if type(loaded.BringMode) == "string" then Config.BringMode = loaded.BringMode end
+        if type(loaded.BringRange) == "number" then Config.BringRange = loaded.BringRange end
+        if type(loaded.NearRange) == "number" then Config.NearRange = loaded.NearRange end
+        if type(loaded.FarmHeight) == "number" then Config.FarmHeight = loaded.FarmHeight end
+        if type(loaded.TweenSpeed) == "number" then Config.TweenSpeed = loaded.TweenSpeed end
+        if type(loaded.AutoV4) == "boolean" then Config.AutoV4 = loaded.AutoV4 end
+        if type(loaded.VisualHitbox) == "boolean" then Config.VisualHitbox = loaded.VisualHitbox end
+    end
+
+    getgenv().Config.AutoV4 = Config.AutoV4
+    getgenv().Config.HoldWeapon = Config.WeaponType
+end
+
+LoadSettings()
+
+local CurrentTween = nil
+local isTweening = false
+local activeAnchorPos = nil
+local lastV4Trigger = 0
+
+local VisualFolder = workspace:FindFirstChild("CapriVisualHitboxes")
+if not VisualFolder then
+    VisualFolder = Instance.new("Folder")
+    VisualFolder.Name = "CapriVisualHitboxes"
+    VisualFolder.Parent = workspace
+end
+
+local function ClearVisualHitboxes()
+    pcall(function()
+        VisualFolder:ClearAllChildren()
+    end)
+end
+
+local function UpdateVisualHitbox(mobModel, anchorCFrame)
+    if not Config.VisualHitbox or not mobModel or not mobModel.Parent or not anchorCFrame then
+        return
+    end
+
+    local visName = "Vis_" .. tostring(mobModel:GetDebugId())
+    local boxPart = VisualFolder:FindFirstChild(visName)
+    if not boxPart then
+        boxPart = Instance.new("Part")
+        boxPart.Name = visName
+        boxPart.Anchored = true
+        boxPart.CanCollide = false
+        boxPart.CanTouch = false
+        boxPart.CanQuery = false
+        boxPart.Massless = true
+        boxPart.Material = Enum.Material.ForceField
+        boxPart.Color = Color3.fromRGB(255, 85, 130)
+        boxPart.Transparency = 0.78
+        boxPart.Size = Vector3.new(10, 10, 10)
+
+        local adorn = Instance.new("SelectionBox")
+        adorn.Name = "Outline"
+        adorn.Color3 = Color3.fromRGB(255, 105, 155)
+        adorn.LineThickness = 0.04
+        adorn.Adornee = boxPart
+        adorn.Parent = boxPart
+
+        boxPart.Parent = VisualFolder
+    end
+
+    boxPart.CFrame = anchorCFrame
+end
+
+local function GetChar()
+    return LocalPlayer.Character
+end
+
+local function GetHRP()
+    local char = GetChar()
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function GetHum()
+    local char = GetChar()
+    return char and char:FindFirstChildOfClass("Humanoid")
+end
+
+local function IsAliveMob(mob)
+    if not mob or not mob.Parent then return false end
+    if Players:GetPlayerFromCharacter(mob) then return false end
+    local hum = mob:FindFirstChildOfClass("Humanoid")
+    local hrp = mob:FindFirstChild("HumanoidRootPart")
+    return hum and hrp and hum.Health > 0
+end
+
+local function IsV4Ready()
+    local char = GetChar()
+    if not char then return false end
+
+    local awakening = char:FindFirstChild("Awakening") or char:FindFirstChild("RaceV4") or char:FindFirstChild("V4Active")
+    if awakening then
+        if awakening:IsA("BoolValue") then
+            return not awakening.Value
+        elseif awakening:IsA("NumberValue") or awakening:IsA("IntValue") then
+            return awakening.Value <= 0
+        end
+    end
+
+    for _, container in ipairs({char, LocalPlayer}) do
+        for _, child in ipairs(container:GetChildren()) do
+            local lower = string.lower(child.Name)
+            if string.find(lower, "v4") or string.find(lower, "awaken") or string.find(lower, "energy") or string.find(lower, "meter") then
+                if child:IsA("BoolValue") and child.Value == true then
+                    return true
+                elseif child:IsA("NumberValue") or child:IsA("IntValue") then
+                    if child.Value >= 100 then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if playerGui then
+        for _, desc in ipairs(playerGui:GetDescendants()) do
+            local lowerName = string.lower(desc.Name)
+            if (string.find(lowerName, "v4") or string.find(lowerName, "awaken") or string.find(lowerName, "race")) and (desc:IsA("Frame") or desc:IsA("ImageLabel")) then
+                local sizeX = desc.Size.X.Scale
+                if sizeX and sizeX >= 0.99 then
+                    return true
+                end
+            end
+        end
+    end
+
+    return true
+end
+
+local function TryActivateV4()
+    if not Config.AutoV4 then return end
+    local now = os.clock()
+    if now - lastV4Trigger < 1.2 then return end
+
+    local char = GetChar()
+    local hum = GetHum()
+    if not (char and hum and hum.Health > 0) then return end
+
+    if not IsV4Ready() then return end
+    lastV4Trigger = now
+
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Y, false, game)
+        task.wait(0.05)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Y, false, game)
+    end)
+
+    pcall(function()
+        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+        local commE = remotes and remotes:FindFirstChild("CommE")
+        if commE and commE:IsA("RemoteEvent") then
+            commE:FireServer("ActivateV4")
+        end
+    end)
+end
+
+local function AutoHaki()
+    local char = GetChar()
+    if char and not char:FindFirstChild("HasBuso") then
+        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+        local commF = remotes and remotes:FindFirstChild("CommF_")
+        if commF then
+            pcall(function()
+                commF:InvokeServer("Buso")
+            end)
+        end
+    end
+end
+
+local function GetActiveWeapon()
+    local wType = Config.WeaponType
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    local char = GetChar()
+
+    local function findIn(container)
+        if not container then return nil end
+        for _, tool in ipairs(container:GetChildren()) do
+            if tool:IsA("Tool") and tool.ToolTip == wType then
+                return tool.Name
+            end
+        end
+        return nil
+    end
+
+    return findIn(char) or findIn(backpack) or wType
+end
+
+local function EquipWeapon(weaponName)
+    if not weaponName then return end
+    local char = GetChar()
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    local hum = GetHum()
+    if not (char and backpack and hum) then return end
+    if char:FindFirstChild(weaponName) then return end
+
+    local tool = backpack:FindFirstChild(weaponName)
+    if not tool then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item:IsA("Tool") and (item.Name == weaponName or item.ToolTip == weaponName) then
+                tool = item
+                break
+            end
+        end
+    end
+
+    if tool then
+        pcall(function()
+            hum:EquipTool(tool)
+        end)
+    end
+end
+
+local function AttackClick()
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:Button1Down(Vector2.new(1280, 672), workspace.CurrentCamera.CFrame)
+        task.wait(0.02)
+        VirtualUser:Button1Up(Vector2.new(1280, 672), workspace.CurrentCamera.CFrame)
+    end)
+end
+
+local function ClearTelePart()
+    local char = GetChar()
+    if char and char:FindFirstChild("PartTele") then
+        pcall(function() char.PartTele:Destroy() end)
+    end
+end
+
+local function StopMovement()
+    isTweening = false
+    activeAnchorPos = nil
+    ClearVisualHitboxes()
+    if CurrentTween then
+        pcall(function() CurrentTween:Cancel() end)
+        CurrentTween = nil
+    end
+    ClearTelePart()
+    local hrp = GetHRP()
+    if hrp then
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        if hrp:FindFirstChild("BodyClip") then
+            pcall(function() hrp.BodyClip:Destroy() end)
+        end
+    end
+end
+
+local function HoldStablePosition(desiredPos, lookAtPos)
+    local hrp = GetHRP()
+    local hum = GetHum()
+    if not (hrp and hum and hum.Health > 0) then return end
+
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.AssemblyAngularVelocity = Vector3.zero
+
+    local currentPos = hrp.Position
+    local smoothPos = currentPos:Lerp(desiredPos, 0.35)
+    if (desiredPos - currentPos).Magnitude < 0.35 then
+        smoothPos = desiredPos
+    end
+
+    if lookAtPos then
+        local flatLook = Vector3.new(lookAtPos.X, smoothPos.Y, lookAtPos.Z)
+        if (flatLook - smoothPos).Magnitude > 0.05 then
+            hrp.CFrame = CFrame.lookAt(smoothPos, flatLook)
+        else
+            hrp.CFrame = CFrame.new(smoothPos)
+        end
+    else
+        hrp.CFrame = CFrame.new(smoothPos)
+    end
+end
+
+local function MoveToCFrame(targetCF)
+    if not targetCF then return end
+    local char = GetChar()
+    local hum = GetHum()
+    local hrp = GetHRP()
+    if not (char and hum and hrp and hum.Health > 0) then return end
+
+    local dist = (targetCF.Position - hrp.Position).Magnitude
+    if dist <= 75 then
+        if CurrentTween then
+            pcall(function() CurrentTween:Cancel() end)
+            CurrentTween = nil
+        end
+        isTweening = false
+        ClearTelePart()
+        HoldStablePosition(targetCF.Position, activeAnchorPos)
+        return
+    end
+
+    local part = char:FindFirstChild("PartTele")
+    if not part then
+        part = Instance.new("Part")
+        part.Name = "PartTele"
+        part.Size = Vector3.new(6, 1, 6)
+        part.Anchored = true
+        part.Transparency = 1
+        part.CanCollide = false
+        part.CFrame = CFrame.new(hrp.Position)
+        part.Parent = char
+    end
+
+    isTweening = true
+    local speed = math.max(tonumber(Config.TweenSpeed) or 350, 80)
+    local duration = math.max(dist / speed, 0.04)
+
+    if CurrentTween then
+        pcall(function() CurrentTween:Cancel() end)
+    end
+
+    CurrentTween = TweenService:Create(part, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = CFrame.new(targetCF.Position)})
+    CurrentTween:Play()
+
+    local elapsed = 0
+    while isTweening and elapsed < duration do
+        task.wait(0.03)
+        elapsed += 0.03
+        if not (Config.AutoSelected or Config.AutoNear) then
+            break
+        end
+        local curHRP = GetHRP()
+        if curHRP and part and part.Parent then
+            curHRP.AssemblyLinearVelocity = Vector3.zero
+            curHRP.AssemblyAngularVelocity = Vector3.zero
+            curHRP.CFrame = CFrame.new(part.Position)
+            if activeAnchorPos and (curHRP.Position - activeAnchorPos).Magnitude <= 75 then
+                break
+            end
+        end
+    end
+
+    if CurrentTween then
+        pcall(function() CurrentTween:Cancel() end)
+        CurrentTween = nil
+    end
+    isTweening = false
+    ClearTelePart()
+end
+
+-- Khóa trọng lực & va chạm ổn định khi farm (không giật)
+RunService.Stepped:Connect(function()
+    if Config.AutoSelected or Config.AutoNear then
+        local char = GetChar()
+        local hrp = GetHRP()
+        if hrp then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+            if not hrp:FindFirstChild("BodyClip") then
+                local bv = Instance.new("BodyVelocity")
+                bv.Name = "BodyClip"
+                bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+                bv.Velocity = Vector3.zero
+                bv.Parent = hrp
+            end
+        end
+        if char then
+            for _, v in ipairs(char:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    v.CanCollide = false
+                end
+            end
+        end
+    else
+        local hrp = GetHRP()
+        if hrp and hrp:FindFirstChild("BodyClip") then
+            pcall(function() hrp.BodyClip:Destroy() end)
+        end
+    end
+end)
+
+local function ScanMobs()
+    local hrp = GetHRP()
+    local enemies = workspace:FindFirstChild("Enemies")
+    local counts = {}
+    local list = {}
+
+    if enemies then
+        for _, mob in ipairs(enemies:GetChildren()) do
+            if IsAliveMob(mob) then
+                local ok = true
+                if hrp then
+                    ok = (mob.HumanoidRootPart.Position - hrp.Position).Magnitude <= 3000
+                end
+                if ok then
+                    if not counts[mob.Name] then
+                        counts[mob.Name] = 0
+                        table.insert(list, mob.Name)
+                    end
+                    counts[mob.Name] += 1
+                end
+            end
+        end
+    end
+
+    if #list == 0 and enemies then
+        for _, mob in ipairs(enemies:GetChildren()) do
+            if IsAliveMob(mob) then
+                if not counts[mob.Name] then
+                    counts[mob.Name] = 0
+                    table.insert(list, mob.Name)
+                end
+                counts[mob.Name] += 1
+            end
+        end
+    end
+
+    table.sort(list)
+    return list, counts
+end
+
+local function BringMobs(centerPos, targetName)
+    if not Config.BringEnabled or not centerPos then
+        ClearVisualHitboxes()
+        return
+    end
+    if not Config.VisualHitbox then
+        ClearVisualHitboxes()
+    end
+
+    local enemies = workspace:FindFirstChild("Enemies")
+    if not enemies then return end
+
+    pcall(function()
+        sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
+    end)
+
+    local isMixed = (Config.BringMode == "Mixed / All")
+    local idx = 0
+
+    for _, mob in ipairs(enemies:GetChildren()) do
+        if IsAliveMob(mob) then
+            local canBring = isMixed or (targetName == nil) or (mob.Name == targetName)
+            if canBring then
+                local mhrp = mob.HumanoidRootPart
+                local mhum = mob.Humanoid
+                if (mhrp.Position - centerPos).Magnitude <= Config.BringRange then
+                    idx += 1
+                    local angle = (idx % 8) * (math.pi / 4)
+                    local spread = Vector3.new(math.cos(angle) * 2.5, -2, math.sin(angle) * 2.5)
+                    local destCF = CFrame.new(centerPos + spread)
+                    pcall(function()
+                        mhum.WalkSpeed = 0
+                        mhum.JumpPower = 0
+                        mhrp.CanCollide = false
+                        mhrp.Anchored = false
+                        mhrp.AssemblyLinearVelocity = Vector3.zero
+                        mhrp.AssemblyAngularVelocity = Vector3.zero
+                        -- Ẩn hitbox vật lý: giữ HRP gọn để không hất/rung nhân vật, hiển thị bằng visual riêng
+                        mhrp.Size = Vector3.new(2, 2, 1)
+                        mhrp.CFrame = destCF
+                    end)
+                    UpdateVisualHitbox(mob, destCF)
+                end
+            end
+        end
+    end
+end
+
+local function FindNearestMob(maxDist, onlyName)
+    local hrp = GetHRP()
+    if not hrp then return nil end
+    local enemies = workspace:FindFirstChild("Enemies")
+    if not enemies then return nil end
+
+    local bestMob = nil
+    local bestDist = maxDist or math.huge
+
+    for _, mob in ipairs(enemies:GetChildren()) do
+        if IsAliveMob(mob) and (not onlyName or mob.Name == onlyName) then
+            local d = (mob.HumanoidRootPart.Position - hrp.Position).Magnitude
+            if d < bestDist then
+                bestDist = d
+                bestMob = mob
+            end
+        end
+    end
+
+    return bestMob
+end
+
+-- Xóa GUI cũ nếu chạy lại
+pcall(function()
+    local parentGui = game:GetService("CoreGui")
+    if parentGui:FindFirstChild("CapriFarmUI") then
+        parentGui.CapriFarmUI:Destroy()
+    end
+end)
+pcall(function()
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if pg and pg:FindFirstChild("CapriFarmUI") then
+        pg.CapriFarmUI:Destroy()
+    end
+end)
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CapriFarmUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local okGui = pcall(function()
+    ScreenGui.Parent = game:GetService("CoreGui")
+end)
+if not okGui or not ScreenGui.Parent then
+    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+-- Icon Menu Hình Tròn (kéo thả + bấm mở/đóng)
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Name = "CapriFarmCircleIcon"
+ToggleBtn.Size = UDim2.new(0, 48, 0, 48)
+ToggleBtn.Position = UDim2.new(0, 14, 0, 115)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(28, 28, 40)
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextSize = 10
+ToggleBtn.Text = "CAPRI"
+ToggleBtn.Active = true
+ToggleBtn.Parent = ScreenGui
+
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
+local tStroke = Instance.new("UIStroke", ToggleBtn)
+tStroke.Color = Color3.fromRGB(235, 64, 92)
+tStroke.Thickness = 2
+
+-- Khung GUI Chính Hình Chữ Nhật (nhỏ gọn + kéo di chuyển tự do)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "CapriFarmMainFrame"
+MainFrame.Size = UDim2.new(0, 320, 0, 248)
+MainFrame.Position = UDim2.new(0, 72, 0, 115)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Parent = ScreenGui
+
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 4)
+local mStroke = Instance.new("UIStroke", MainFrame)
+mStroke.Color = Color3.fromRGB(85, 85, 115)
+mStroke.Thickness = 1.4
+
+local Header = Instance.new("Frame")
+Header.Name = "Header"
+Header.Size = UDim2.new(1, 0, 0, 30)
+Header.BackgroundColor3 = Color3.fromRGB(32, 32, 46)
+Header.BorderSizePixel = 0
+Header.Active = true
+Header.Parent = MainFrame
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 4)
+
+local TitleLbl = Instance.new("TextLabel")
+TitleLbl.Size = UDim2.new(1, -36, 1, 0)
+TitleLbl.Position = UDim2.new(0, 8, 0, 0)
+TitleLbl.BackgroundTransparency = 1
+TitleLbl.Text = "CAPRI FARM"
+TitleLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLbl.Font = Enum.Font.GothamBold
+TitleLbl.TextSize = 11
+TitleLbl.TextXAlignment = Enum.TextXAlignment.Left
+TitleLbl.Parent = Header
+
+local CloseX = Instance.new("TextButton")
+CloseX.Name = "CloseButton"
+CloseX.Size = UDim2.new(0, 22, 0, 20)
+CloseX.Position = UDim2.new(1, -27, 0.5, -10)
+CloseX.BackgroundColor3 = Color3.fromRGB(185, 48, 48)
+CloseX.BorderSizePixel = 0
+CloseX.Text = "X"
+CloseX.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseX.Font = Enum.Font.GothamBold
+CloseX.TextSize = 11
+CloseX.Parent = Header
+Instance.new("UICorner", CloseX).CornerRadius = UDim.new(0, 3)
+
+-- Thanh chuyển 2 Tab: Farm & Setting
+local TabBar = Instance.new("Frame")
+TabBar.Name = "TabBar"
+TabBar.Size = UDim2.new(1, -10, 0, 24)
+TabBar.Position = UDim2.new(0, 5, 0, 34)
+TabBar.BackgroundTransparency = 1
+TabBar.Parent = MainFrame
+
+local FarmTabBtn = Instance.new("TextButton")
+FarmTabBtn.Size = UDim2.new(0.5, -3, 1, 0)
+FarmTabBtn.Position = UDim2.new(0, 0, 0, 0)
+FarmTabBtn.BorderSizePixel = 0
+FarmTabBtn.Font = Enum.Font.GothamBold
+FarmTabBtn.TextSize = 11
+FarmTabBtn.Text = "Farm"
+FarmTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FarmTabBtn.Parent = TabBar
+Instance.new("UICorner", FarmTabBtn).CornerRadius = UDim.new(0, 3)
+
+local SettingTabBtn = Instance.new("TextButton")
+SettingTabBtn.Size = UDim2.new(0.5, -3, 1, 0)
+SettingTabBtn.Position = UDim2.new(0.5, 3, 0, 0)
+SettingTabBtn.BorderSizePixel = 0
+SettingTabBtn.Font = Enum.Font.GothamBold
+SettingTabBtn.TextSize = 11
+SettingTabBtn.Text = "Setting"
+SettingTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SettingTabBtn.Parent = TabBar
+Instance.new("UICorner", SettingTabBtn).CornerRadius = UDim.new(0, 3)
+
+local function CreateTabPage(name)
+    local frame = Instance.new("ScrollingFrame")
+    frame.Name = name .. "Page"
+    frame.Size = UDim2.new(1, -10, 1, -64)
+    frame.Position = UDim2.new(0, 5, 0, 62)
+    frame.BackgroundTransparency = 1
+    frame.BorderSizePixel = 0
+    frame.ScrollBarThickness = 3
+    frame.CanvasSize = UDim2.new(0, 0, 0, 300)
+    frame.Parent = MainFrame
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 4)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = frame
+
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        frame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
+    end)
+
+    return frame
+end
+
+local FarmPage = CreateTabPage("Farm")
+local SettingPage = CreateTabPage("Setting")
+
+local function SwitchTab(tabName)
+    local isFarm = (tabName == "Farm")
+    FarmPage.Visible = isFarm
+    SettingPage.Visible = not isFarm
+    FarmTabBtn.BackgroundColor3 = isFarm and Color3.fromRGB(52, 95, 185) or Color3.fromRGB(34, 34, 46)
+    SettingTabBtn.BackgroundColor3 = (not isFarm) and Color3.fromRGB(52, 95, 185) or Color3.fromRGB(34, 34, 46)
+end
+
+FarmTabBtn.MouseButton1Click:Connect(function()
+    SwitchTab("Farm")
+end)
+SettingTabBtn.MouseButton1Click:Connect(function()
+    SwitchTab("Setting")
+end)
+SwitchTab("Farm")
+
+-- Hàm kéo thả tự do cho Icon tròn và GUI chữ nhật
+local function MakeDraggable(dragHandle, moveTarget, onClickIfNotDragged)
+    local dragging = false
+    local moved = false
+    local dragInput = nil
+    local dragStart = nil
+    local startPos = nil
+
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            moved = false
+            dragStart = input.Position
+            startPos = moveTarget.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    local wasMoved = moved
+                    dragging = false
+                    if not wasMoved and onClickIfNotDragged then
+                        onClickIfNotDragged()
+                    end
+                end
+            end)
+        end
+    end)
+
+    dragHandle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input == dragInput then
+            local delta = input.Position - dragStart
+            if delta.Magnitude > 5 then
+                moved = true
+            end
+            moveTarget.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+local function SetMenuOpen(open)
+    MainFrame.Visible = open
+    ToggleBtn.Text = open and "CAPRI" or "MỞ"
+    tStroke.Color = open and Color3.fromRGB(65, 200, 115) or Color3.fromRGB(235, 64, 92)
+end
+
+MakeDraggable(ToggleBtn, ToggleBtn, function()
+    SetMenuOpen(not MainFrame.Visible)
+end)
+MakeDraggable(Header, MainFrame)
+MakeDraggable(MainFrame, MainFrame)
+
+CloseX.MouseButton1Click:Connect(function()
+    SetMenuOpen(false)
+end)
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if not gp and input.KeyCode == Enum.KeyCode.RightShift then
+        SetMenuOpen(not MainFrame.Visible)
+    end
+end)
+
+-- Helper tạo nút nhỏ gọn trong từng Tab
+local function CreateRowBuilder(parentFrame)
+    local idxOrder = 0
+    local function nextOrd()
+        idxOrder += 1
+        return idxOrder
+    end
+
+    local function AddToggle(labelText, initial, onToggle)
+        local btn = Instance.new("TextButton")
+        btn.LayoutOrder = nextOrd()
+        btn.Size = UDim2.new(1, 0, 0, 24)
+        btn.BorderSizePixel = 0
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 10
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.Parent = parentFrame
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 3)
+
+        local state = initial
+        local function paint()
+            btn.BackgroundColor3 = state and Color3.fromRGB(40, 145, 75) or Color3.fromRGB(36, 36, 48)
+            btn.Text = string.format("%s: %s", labelText, state and "BẬT" or "TẮT")
+        end
+        paint()
+
+        btn.MouseButton1Click:Connect(function()
+            state = not state
+            paint()
+            onToggle(state)
+        end)
+
+        return btn, function(newVal)
+            if state ~= newVal then
+                state = newVal
+                paint()
+            end
+        end
+    end
+
+    local function AddButton(labelText, color, onClick)
+        local btn = Instance.new("TextButton")
+        btn.LayoutOrder = nextOrd()
+        btn.Size = UDim2.new(1, 0, 0, 24)
+        btn.BackgroundColor3 = color or Color3.fromRGB(52, 85, 165)
+        btn.BorderSizePixel = 0
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 10
+        btn.Text = labelText
+        btn.Parent = parentFrame
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 3)
+        btn.MouseButton1Click:Connect(onClick)
+        return btn
+    end
+
+    local function AddCycle(prefix, options, startIdx, onChange)
+        local cur = startIdx or 1
+        local btn = Instance.new("TextButton")
+        btn.LayoutOrder = nextOrd()
+        btn.Size = UDim2.new(1, 0, 0, 24)
+        btn.BackgroundColor3 = Color3.fromRGB(42, 42, 56)
+        btn.BorderSizePixel = 0
+        btn.TextColor3 = Color3.fromRGB(240, 240, 255)
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 10
+        btn.Parent = parentFrame
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 3)
+
+        local function refresh()
+            btn.Text = string.format("%s: %s", prefix, tostring(options[cur]))
+        end
+        refresh()
+
+        btn.MouseButton1Click:Connect(function()
+            cur += 1
+            if cur > #options then cur = 1 end
+            refresh()
+            onChange(options[cur])
+        end)
+
+        return btn, function(newOpts, selectedNameOrValue)
+            if type(newOpts) == "table" then
+                options = (#newOpts > 0) and newOpts or {"Chưa có quái"}
+            end
+            cur = 1
+            if selectedNameOrValue ~= nil then
+                for i, v in ipairs(options) do
+                    if v == selectedNameOrValue then
+                        cur = i
+                        break
+                    end
+                end
+            end
+            refresh()
+        end
+    end
+
+    local function AddLabel(txt, height)
+        local lbl = Instance.new("TextLabel")
+        lbl.LayoutOrder = nextOrd()
+        lbl.Size = UDim2.new(1, 0, 0, height or 24)
+        lbl.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
+        lbl.BorderSizePixel = 0
+        lbl.TextColor3 = Color3.fromRGB(210, 220, 235)
+        lbl.Font = Enum.Font.Gotham
+        lbl.TextSize = 10
+        lbl.TextWrapped = true
+        lbl.Text = txt
+        lbl.Parent = parentFrame
+        Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 3)
+        return lbl
+    end
+
+    return {
+        Toggle = AddToggle,
+        Button = AddButton,
+        Cycle = AddCycle,
+        Label = AddLabel
+    }
+end
+
+local FarmUI = CreateRowBuilder(FarmPage)
+local SettingUI = CreateRowBuilder(SettingPage)
+
+-- ==================== TAB FARM ====================
+local weaponOpts = {"Melee", "Sword", "Gun", "Blox Fruit"}
+local startWeaponIdx = table.find(weaponOpts, Config.WeaponType) or 1
+local _, SetWeaponCycle = FarmUI.Cycle("Vũ Khí", weaponOpts, startWeaponIdx, function(w)
+    Config.WeaponType = w
+    getgenv().Config.HoldWeapon = w
+end)
+
+local StatusBox = FarmUI.Label("Quái đã chọn: Chưa có | Bấm 'Quét Đảo' để lấy danh sách.", 26)
+
+local _, UpdateMobCycle = FarmUI.Cycle("Quái Đã Chọn", {"Chưa quét"}, 1, function(mobName)
+    if mobName ~= "Chưa quét" and mobName ~= "Chưa có quái" then
+        Config.SelectedMob = mobName
+        StatusBox.Text = "Quái đã chọn: " .. mobName
+    end
+end)
+
+local function DoScan()
+    local list, counts = ScanMobs()
+    if #list > 0 then
+        if not Config.SelectedMob or not table.find(list, Config.SelectedMob) then
+            Config.SelectedMob = list[1]
+        end
+        UpdateMobCycle(list, Config.SelectedMob)
+        local summary = {}
+        for i = 1, math.min(#list, 3) do
+            local n = list[i]
+            table.insert(summary, n .. " (" .. tostring(counts[n]) .. ")")
+        end
+        StatusBox.Text = "Chọn: " .. tostring(Config.SelectedMob) .. " | " .. table.concat(summary, ", ")
+    else
+        Config.SelectedMob = nil
+        UpdateMobCycle({"Chưa có quái"}, nil)
+        StatusBox.Text = "Không tìm thấy quái sống gần đây. Hãy lại gần đảo rồi bấm Quét Đảo."
+    end
+end
+
+FarmUI.Button("Quét Đảo Ngay (Scan Mobs)", Color3.fromRGB(50, 95, 185), DoScan)
+
+local _, SetAutoSelectedUI = FarmUI.Toggle("Auto Farm Quái Đã Chọn", false, function(val)
+    Config.AutoSelected = val
+    if val then
+        Config.AutoNear = false
+    end
+    if not (Config.AutoSelected or Config.AutoNear) then
+        StopMovement()
+    end
+end)
+
+local _, SetAutoNearUI = FarmUI.Toggle("Auto Farm Near", false, function(val)
+    Config.AutoNear = val
+    if val then
+        Config.AutoSelected = false
+    end
+    if not (Config.AutoSelected or Config.AutoNear) then
+        StopMovement()
+    end
+end)
+
+local _, SetAutoV4UI = FarmUI.Toggle("Auto V4", Config.AutoV4, function(val)
+    Config.AutoV4 = val
+    getgenv().Config.AutoV4 = val
+end)
+
+local _, SetBringUI = FarmUI.Toggle("Gom Quái (Bring Mobs)", Config.BringEnabled, function(val)
+    Config.BringEnabled = val
+    if not val then
+        ClearVisualHitboxes()
+    end
+end)
+
+local bringModeOpts = {"Mixed / All", "Same Name"}
+local startBringModeIdx = table.find(bringModeOpts, Config.BringMode) or 1
+local _, SetBringModeCycle = FarmUI.Cycle("Chế Độ Gom", bringModeOpts, startBringModeIdx, function(mode)
+    Config.BringMode = mode
+end)
+
+-- ==================== TAB SETTING ====================
+local heightOpts = {12, 18, 24, 32, 40}
+local startHeightIdx = table.find(heightOpts, Config.FarmHeight) or 3
+local _, SetHeightCycle = SettingUI.Cycle("Độ Cao Farm Quái", heightOpts, startHeightIdx, function(h)
+    Config.FarmHeight = h
+end)
+
+local bringRangeOpts = {150, 250, 350, 500, 700}
+local startBringRangeIdx = table.find(bringRangeOpts, Config.BringRange) or 3
+local _, SetBringRangeCycle = SettingUI.Cycle("Phạm Vi Gom Quái", bringRangeOpts, startBringRangeIdx, function(rng)
+    Config.BringRange = rng
+end)
+
+local nearRangeOpts = {400, 700, 1200, 2000}
+local startNearRangeIdx = table.find(nearRangeOpts, Config.NearRange) or 2
+local _, SetNearRangeCycle = SettingUI.Cycle("Bán Kính Near", nearRangeOpts, startNearRangeIdx, function(rng)
+    Config.NearRange = rng
+end)
+
+local speedOpts = {200, 350, 500, 800}
+local startSpeedIdx = table.find(speedOpts, Config.TweenSpeed) or 2
+local _, SetSpeedCycle = SettingUI.Cycle("Tốc Độ Di Chuyển", speedOpts, startSpeedIdx, function(spd)
+    Config.TweenSpeed = spd
+end)
+
+local _, SetVisualHitboxUI = SettingUI.Toggle("Hiện Visual Hitbox", Config.VisualHitbox, function(val)
+    Config.VisualHitbox = val
+    if not val then
+        ClearVisualHitboxes()
+    end
+end)
+
+local SaveStatusLbl = SettingUI.Label("Trạng thái lưu: Đã áp dụng cấu hình hiện tại.", 24)
+
+SettingUI.Button("Lưu Setting", Color3.fromRGB(45, 135, 85), function()
+    local ok = SaveSettings()
+    if ok then
+        SaveStatusLbl.Text = "Đã lưu setting thành công (" .. os.date("%H:%M:%S") .. ")."
+    else
+        SaveStatusLbl.Text = "Lưu bộ nhớ tạm thành công (executor không hỗ trợ ghi file)."
+    end
+end)
+
+-- Đồng bộ giao diện theo cấu hình đã nạp
+SetWeaponCycle(weaponOpts, Config.WeaponType)
+SetAutoV4UI(Config.AutoV4)
+SetBringUI(Config.BringEnabled)
+SetBringModeCycle(bringModeOpts, Config.BringMode)
+SetHeightCycle(heightOpts, Config.FarmHeight)
+SetBringRangeCycle(bringRangeOpts, Config.BringRange)
+SetNearRangeCycle(nearRangeOpts, Config.NearRange)
+SetSpeedCycle(speedOpts, Config.TweenSpeed)
+SetVisualHitboxUI(Config.VisualHitbox)
+
+-- Đồng bộ trạng thái nút UI khi bật chéo Selected / Near
+task.spawn(function()
+    while task.wait(0.25) do
+        SetAutoSelectedUI(Config.AutoSelected)
+        SetAutoNearUI(Config.AutoNear)
+    end
+end)
+
+-- Vòng lặp Auto V4
+task.spawn(function()
+    while task.wait(0.25) do
+        if Config.AutoV4 then
+            TryActivateV4()
+        end
+    end
+end)
+
+-- Quét tự động lần đầu sau khi load
+task.delay(0.5, DoScan)
+
+-- Vòng lặp Auto Farm chính (ổn định vị trí, không rung lắc)
+task.spawn(function()
+    while task.wait(0.05) do
+        if Config.AutoSelected or Config.AutoNear then
+            pcall(function()
+                local target = nil
+                if Config.AutoSelected then
+                    target = FindNearestMob(4500, Config.SelectedMob)
+                elseif Config.AutoNear then
+                    target = FindNearestMob(Config.NearRange, nil)
+                end
+
+                if IsAliveMob(target) then
+                    local anchor = target.HumanoidRootPart.Position
+                    activeAnchorPos = anchor
+                    local targetName = target.Name
+
+                    while (Config.AutoSelected or Config.AutoNear) and IsAliveMob(target) do
+                        AutoHaki()
+                        EquipWeapon(GetActiveWeapon())
+                        BringMobs(anchor, targetName)
+                        if Config.AutoV4 then
+                            TryActivateV4()
+                        end
+
+                        local hrp = GetHRP()
+                        local hoverPos = anchor + Vector3.new(0, Config.FarmHeight, 0)
+                        if hrp then
+                            local distToHover = (hoverPos - hrp.Position).Magnitude
+                            if distToHover > 75 then
+                                MoveToCFrame(CFrame.new(hoverPos))
+                            else
+                                HoldStablePosition(hoverPos, anchor)
+                            end
+                        end
+
+                        AttackClick()
+                        task.wait(0.05)
+                    end
+                else
+                    activeAnchorPos = nil
+                    ClearVisualHitboxes()
+                    task.wait(0.25)
+                end
+            end)
+        else
+            activeAnchorPos = nil
+            ClearVisualHitboxes()
+            task.wait(0.2)
+        end
+    end
+end)
