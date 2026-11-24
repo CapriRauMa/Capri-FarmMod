@@ -1,4 +1,4 @@
--- Capri Farm Standalone UI: 2 Tab (Farm & Setting) + Visual Hitbox + Lưu Setting + Auto V4 + Fast Attack
+-- Capri Farm Standalone UI: 3 Tab (Farm, Setting, Mastery) + Mastery Melee/Sword/Gun/Fruit + Silent NPC (Capri Menu)
 
 getgenv().Config = getgenv().Config or {
     AutoBounty = true,
@@ -100,6 +100,7 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
 -- Chạy kèm Fast Attack khi khởi động Capri Farm
 task.spawn(function()
@@ -120,6 +121,10 @@ pcall(function()
     end)
 end)
 
+local FRUIT_KEYS = {"Z", "X", "C", "V"}
+local MELEE_KEYS = {"Z", "X", "C"}
+local SHORT_WEAPON_KEYS = {"Z", "X"}
+
 -- Biến cấu hình
 local Config = {
     WeaponType = "Melee",
@@ -127,16 +132,52 @@ local Config = {
     AutoSelected = false,
     AutoNear = false,
     AutoV4 = false,
+    SilentNPCEnabled = false,
+    SilentMaxDist = 700,
+    SilentPrediction = 0.165,
     BringEnabled = true,
     BringMode = "Mixed / All", -- "Mixed / All" hoặc "Same Name"
     BringRange = 350,
     NearRange = 700,
     FarmHeight = 24,
     TweenSpeed = 350,
-    VisualHitbox = true
+    VisualHitbox = true,
+
+    MeleeMasteryEnabled = false,
+    MeleeSkillHP = 30,
+    MeleeSelectedKeys = { Z = true, X = true, C = true },
+
+    SwordMasteryEnabled = false,
+    SwordSkillHP = 30,
+    SwordSelectedKeys = { Z = true, X = true },
+
+    GunMasteryEnabled = false,
+    GunSkillHP = 30,
+    GunSelectedKeys = { Z = true, X = true },
+
+    FruitMasteryEnabled = false,
+    FruitSkillHP = 30,
+    FruitSelectedKeys = { Z = true, X = true, C = true, V = true }
 }
 
 local SETTINGS_FILE = "CapriFarm_Settings.json"
+
+local function BuildSkillList(keyMap, keyList)
+    local out = {}
+    for _, k in ipairs(keyList) do
+        if keyMap[k] then
+            table.insert(out, k)
+        end
+    end
+    return out
+end
+
+local function SyncGlobalSkillLists()
+    getgenv().Config.MeleeSkills = BuildSkillList(Config.MeleeSelectedKeys, MELEE_KEYS)
+    getgenv().Config.SwordSkills = BuildSkillList(Config.SwordSelectedKeys, SHORT_WEAPON_KEYS)
+    getgenv().Config.GunSkills = BuildSkillList(Config.GunSelectedKeys, SHORT_WEAPON_KEYS)
+    getgenv().Config.FruitSkills = BuildSkillList(Config.FruitSelectedKeys, FRUIT_KEYS)
+end
 
 local function SaveSettings()
     local payload = {
@@ -148,12 +189,26 @@ local function SaveSettings()
         FarmHeight = Config.FarmHeight,
         TweenSpeed = Config.TweenSpeed,
         AutoV4 = Config.AutoV4,
-        VisualHitbox = Config.VisualHitbox
+        SilentNPCEnabled = Config.SilentNPCEnabled,
+        VisualHitbox = Config.VisualHitbox,
+        MeleeMasteryEnabled = Config.MeleeMasteryEnabled,
+        MeleeSkillHP = Config.MeleeSkillHP,
+        MeleeSelectedKeys = Config.MeleeSelectedKeys,
+        SwordMasteryEnabled = Config.SwordMasteryEnabled,
+        SwordSkillHP = Config.SwordSkillHP,
+        SwordSelectedKeys = Config.SwordSelectedKeys,
+        GunMasteryEnabled = Config.GunMasteryEnabled,
+        GunSkillHP = Config.GunSkillHP,
+        GunSelectedKeys = Config.GunSelectedKeys,
+        FruitMasteryEnabled = Config.FruitMasteryEnabled,
+        FruitSkillHP = Config.FruitSkillHP,
+        FruitSelectedKeys = Config.FruitSelectedKeys
     }
 
     getgenv().CapriFarmSavedSettings = payload
     getgenv().Config.AutoV4 = Config.AutoV4
     getgenv().Config.HoldWeapon = Config.WeaponType
+    SyncGlobalSkillLists()
 
     if type(writefile) == "function" then
         local ok = pcall(function()
@@ -162,6 +217,15 @@ local function SaveSettings()
         return ok
     end
     return true
+end
+
+local function CopyKeyMap(srcMap, targetMap, keyList)
+    if type(srcMap) ~= "table" then return end
+    for _, k in ipairs(keyList) do
+        if type(srcMap[k]) == "boolean" then
+            targetMap[k] = srcMap[k]
+        end
+    end
 end
 
 local function LoadSettings()
@@ -191,11 +255,29 @@ local function LoadSettings()
         if type(loaded.FarmHeight) == "number" then Config.FarmHeight = loaded.FarmHeight end
         if type(loaded.TweenSpeed) == "number" then Config.TweenSpeed = loaded.TweenSpeed end
         if type(loaded.AutoV4) == "boolean" then Config.AutoV4 = loaded.AutoV4 end
+        if type(loaded.SilentNPCEnabled) == "boolean" then Config.SilentNPCEnabled = loaded.SilentNPCEnabled end
         if type(loaded.VisualHitbox) == "boolean" then Config.VisualHitbox = loaded.VisualHitbox end
+
+        if type(loaded.MeleeMasteryEnabled) == "boolean" then Config.MeleeMasteryEnabled = loaded.MeleeMasteryEnabled end
+        if type(loaded.MeleeSkillHP) == "number" then Config.MeleeSkillHP = loaded.MeleeSkillHP end
+        CopyKeyMap(loaded.MeleeSelectedKeys, Config.MeleeSelectedKeys, MELEE_KEYS)
+
+        if type(loaded.SwordMasteryEnabled) == "boolean" then Config.SwordMasteryEnabled = loaded.SwordMasteryEnabled end
+        if type(loaded.SwordSkillHP) == "number" then Config.SwordSkillHP = loaded.SwordSkillHP end
+        CopyKeyMap(loaded.SwordSelectedKeys, Config.SwordSelectedKeys, SHORT_WEAPON_KEYS)
+
+        if type(loaded.GunMasteryEnabled) == "boolean" then Config.GunMasteryEnabled = loaded.GunMasteryEnabled end
+        if type(loaded.GunSkillHP) == "number" then Config.GunSkillHP = loaded.GunSkillHP end
+        CopyKeyMap(loaded.GunSelectedKeys, Config.GunSelectedKeys, SHORT_WEAPON_KEYS)
+
+        if type(loaded.FruitMasteryEnabled) == "boolean" then Config.FruitMasteryEnabled = loaded.FruitMasteryEnabled end
+        if type(loaded.FruitSkillHP) == "number" then Config.FruitSkillHP = loaded.FruitSkillHP end
+        CopyKeyMap(loaded.FruitSelectedKeys, Config.FruitSelectedKeys, FRUIT_KEYS)
     end
 
     getgenv().Config.AutoV4 = Config.AutoV4
     getgenv().Config.HoldWeapon = Config.WeaponType
+    SyncGlobalSkillLists()
 end
 
 LoadSettings()
@@ -203,7 +285,11 @@ LoadSettings()
 local CurrentTween = nil
 local isTweening = false
 local activeAnchorPos = nil
+local currentFarmTarget = nil
+local currentNPCTargetPart = nil
 local lastV4Trigger = 0
+local lastSkillCast = 0
+local isMasterySwitched = false
 
 local VisualFolder = workspace:FindFirstChild("CapriVisualHitboxes")
 if not VisualFolder then
@@ -272,6 +358,120 @@ local function IsAliveMob(mob)
     local hrp = mob:FindFirstChild("HumanoidRootPart")
     return hum and hrp and hum.Health > 0
 end
+
+local function GetMobHPPercent(mob)
+    if not IsAliveMob(mob) then return 0 end
+    local hum = mob:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.MaxHealth <= 0 then return 100 end
+    return (hum.Health / hum.MaxHealth) * 100
+end
+
+local function FindNearestMob(maxDist, onlyName)
+    local hrp = GetHRP()
+    if not hrp then return nil end
+    local enemies = workspace:FindFirstChild("Enemies")
+    if not enemies then return nil end
+
+    local bestMob = nil
+    local bestDist = maxDist or math.huge
+
+    for _, mob in ipairs(enemies:GetChildren()) do
+        if IsAliveMob(mob) and (not onlyName or mob.Name == onlyName) then
+            local d = (mob.HumanoidRootPart.Position - hrp.Position).Magnitude
+            if d < bestDist then
+                bestDist = d
+                bestMob = mob
+            end
+        end
+    end
+
+    return bestMob
+end
+
+-- Target Selector NPC kiểu Capri Menu (Silent NPC)
+local function SelectSilentNPCTarget()
+    if not Config.SilentNPCEnabled then
+        return nil
+    end
+
+    if IsAliveMob(currentFarmTarget) then
+        local hrp = currentFarmTarget:FindFirstChild("HumanoidRootPart")
+        local myRoot = GetHRP()
+        if hrp and (not myRoot or (hrp.Position - myRoot.Position).Magnitude <= math.max(Config.SilentMaxDist, Config.NearRange)) then
+            return hrp
+        end
+    end
+
+    local root = GetHRP()
+    if not root then return nil end
+
+    local maxRange = math.max(Config.SilentMaxDist or 700, Config.NearRange or 700)
+    local bestPart = nil
+    local shortest = maxRange
+
+    local potential = {}
+    local enemies = workspace:FindFirstChild("Enemies")
+    if enemies then
+        for _, e in ipairs(enemies:GetChildren()) do
+            table.insert(potential, e)
+        end
+    end
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj:IsA("Model") and obj ~= GetChar() then
+            local hum = obj:FindFirstChildOfClass("Humanoid")
+            local hrp = obj:FindFirstChild("HumanoidRootPart")
+            if hum and hrp and not Players:GetPlayerFromCharacter(obj) then
+                table.insert(potential, obj)
+            end
+        end
+    end
+
+    for _, char in ipairs(potential) do
+        local hPart = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hPart and hum and hum.Health > 0 and not Players:GetPlayerFromCharacter(char) then
+            local mag = (hPart.Position - root.Position).Magnitude
+            if mag <= maxRange and mag < shortest then
+                shortest = mag
+                bestPart = hPart
+            end
+        end
+    end
+
+    return bestPart
+end
+
+task.spawn(function()
+    while task.wait(0.1) do
+        currentNPCTargetPart = SelectSilentNPCTarget()
+    end
+end)
+
+-- Hook __namecall kiểu Capri Menu cho Silent NPC
+local oldNamecall
+pcall(function()
+    if hookmetamethod and getnamecallmethod then
+        oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+            local method = getnamecallmethod()
+            local args = {...}
+            if not checkcaller() and Config.SilentNPCEnabled and currentNPCTargetPart and currentNPCTargetPart.Parent then
+                if method == "FireServer" or method == "InvokeServer" then
+                    local vel = currentNPCTargetPart.AssemblyLinearVelocity or currentNPCTargetPart.Velocity or Vector3.zero
+                    local pred = currentNPCTargetPart.Position + (vel * Config.SilentPrediction)
+                    for i, v in ipairs(args) do
+                        if typeof(v) == "Vector3" then
+                            args[i] = pred
+                        elseif typeof(v) == "CFrame" then
+                            args[i] = CFrame.new(v.Position, pred)
+                        end
+                    end
+                    return oldNamecall(self, unpack(args))
+                end
+            end
+            return oldNamecall(self, ...)
+        end)
+    end
+end)
 
 local function IsV4Ready()
     local char = GetChar()
@@ -357,8 +557,7 @@ local function AutoHaki()
     end
 end
 
-local function GetActiveWeapon()
-    local wType = Config.WeaponType
+local function GetWeaponByType(wType)
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     local char = GetChar()
 
@@ -372,7 +571,12 @@ local function GetActiveWeapon()
         return nil
     end
 
-    return findIn(char) or findIn(backpack) or wType
+    return findIn(char) or findIn(backpack)
+end
+
+local function GetActiveWeapon()
+    local wType = Config.WeaponType
+    return GetWeaponByType(wType) or wType
 end
 
 local function EquipWeapon(weaponName)
@@ -400,6 +604,101 @@ local function EquipWeapon(weaponName)
     end
 end
 
+local function PressSkillKey(keyStr, holdDuration)
+    local keyCode = Enum.KeyCode[string.upper(tostring(keyStr))]
+    if not keyCode then return end
+    local holdTime = tonumber(holdDuration) or 0.1
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+        task.wait(math.max(holdTime, 0.03))
+        VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+    end)
+end
+
+-- Xác định loại vũ khí Mastery đang khả dụng theo % máu quái
+local function ResolveMasteryMode(targetMob)
+    if not IsAliveMob(targetMob) then
+        return nil, nil
+    end
+
+    local hpPct = GetMobHPPercent(targetMob)
+
+    local candidates = {
+        {
+            wType = "Blox Fruit",
+            enabled = Config.FruitMasteryEnabled,
+            hpLimit = Config.FruitSkillHP,
+            skills = BuildSkillList(Config.FruitSelectedKeys, FRUIT_KEYS)
+        },
+        {
+            wType = "Melee",
+            enabled = Config.MeleeMasteryEnabled,
+            hpLimit = Config.MeleeSkillHP,
+            skills = BuildSkillList(Config.MeleeSelectedKeys, MELEE_KEYS)
+        },
+        {
+            wType = "Sword",
+            enabled = Config.SwordMasteryEnabled,
+            hpLimit = Config.SwordSkillHP,
+            skills = BuildSkillList(Config.SwordSelectedKeys, SHORT_WEAPON_KEYS)
+        },
+        {
+            wType = "Gun",
+            enabled = Config.GunMasteryEnabled,
+            hpLimit = Config.GunSkillHP,
+            skills = BuildSkillList(Config.GunSelectedKeys, SHORT_WEAPON_KEYS)
+        }
+    }
+
+    for _, item in ipairs(candidates) do
+        if item.enabled and (hpPct <= item.hpLimit) and (#item.skills > 0) and GetWeaponByType(item.wType) then
+            return item.wType, item.skills
+        end
+    end
+
+    return nil, nil
+end
+
+local function TryMasterySkills(targetMob)
+    if not IsAliveMob(targetMob) then
+        isMasterySwitched = false
+        return false
+    end
+
+    local masteryWeaponType, skills = ResolveMasteryMode(targetMob)
+    if not masteryWeaponType or not skills then
+        isMasterySwitched = false
+        return false
+    end
+
+    local targetToolName = GetWeaponByType(masteryWeaponType)
+    if targetToolName then
+        EquipWeapon(targetToolName)
+        isMasterySwitched = (Config.WeaponType ~= masteryWeaponType)
+    end
+
+    if UserInputService:GetFocusedTextBox() then
+        return true
+    end
+
+    local now = os.clock()
+    if now - lastSkillCast < 0.4 then
+        return true
+    end
+    lastSkillCast = now
+
+    local gCfg = getgenv().Config or {}
+    local holdMap = (type(gCfg.Hold) == "table" and type(gCfg.Hold[masteryWeaponType]) == "table") and gCfg.Hold[masteryWeaponType] or {}
+    for _, sk in ipairs(skills) do
+        if not IsAliveMob(targetMob) then break end
+        EquipWeapon(targetToolName)
+        PressSkillKey(sk, holdMap[sk] or 0.1)
+        task.wait(0.08)
+    end
+
+    return true
+end
+
 local function AttackClick()
     pcall(function()
         VirtualUser:CaptureController()
@@ -418,7 +717,10 @@ end
 
 local function StopMovement()
     isTweening = false
+    isMasterySwitched = false
     activeAnchorPos = nil
+    currentFarmTarget = nil
+    currentNPCTargetPart = nil
     ClearVisualHitboxes()
     if CurrentTween then
         pcall(function() CurrentTween:Cancel() end)
@@ -637,7 +939,6 @@ local function BringMobs(centerPos, targetName)
                         mhrp.Anchored = false
                         mhrp.AssemblyLinearVelocity = Vector3.zero
                         mhrp.AssemblyAngularVelocity = Vector3.zero
-                        -- Ẩn hitbox vật lý: giữ HRP gọn để không hất/rung nhân vật, hiển thị bằng visual riêng
                         mhrp.Size = Vector3.new(2, 2, 1)
                         mhrp.CFrame = destCF
                     end)
@@ -646,28 +947,6 @@ local function BringMobs(centerPos, targetName)
             end
         end
     end
-end
-
-local function FindNearestMob(maxDist, onlyName)
-    local hrp = GetHRP()
-    if not hrp then return nil end
-    local enemies = workspace:FindFirstChild("Enemies")
-    if not enemies then return nil end
-
-    local bestMob = nil
-    local bestDist = maxDist or math.huge
-
-    for _, mob in ipairs(enemies:GetChildren()) do
-        if IsAliveMob(mob) and (not onlyName or mob.Name == onlyName) then
-            local d = (mob.HumanoidRootPart.Position - hrp.Position).Magnitude
-            if d < bestDist then
-                bestDist = d
-                bestMob = mob
-            end
-        end
-    end
-
-    return bestMob
 end
 
 -- Xóa GUI cũ nếu chạy lại
@@ -717,7 +996,7 @@ tStroke.Thickness = 2
 -- Khung GUI Chính Hình Chữ Nhật (nhỏ gọn + kéo di chuyển tự do)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "CapriFarmMainFrame"
-MainFrame.Size = UDim2.new(0, 320, 0, 248)
+MainFrame.Size = UDim2.new(0, 326, 0, 260)
 MainFrame.Position = UDim2.new(0, 72, 0, 115)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
 MainFrame.BorderSizePixel = 0
@@ -762,7 +1041,7 @@ CloseX.TextSize = 11
 CloseX.Parent = Header
 Instance.new("UICorner", CloseX).CornerRadius = UDim.new(0, 3)
 
--- Thanh chuyển 2 Tab: Farm & Setting
+-- Thanh chuyển 3 Tab: Farm, Setting, Mastery
 local TabBar = Instance.new("Frame")
 TabBar.Name = "TabBar"
 TabBar.Size = UDim2.new(1, -10, 0, 24)
@@ -771,26 +1050,37 @@ TabBar.BackgroundTransparency = 1
 TabBar.Parent = MainFrame
 
 local FarmTabBtn = Instance.new("TextButton")
-FarmTabBtn.Size = UDim2.new(0.5, -3, 1, 0)
+FarmTabBtn.Size = UDim2.new(1/3, -3, 1, 0)
 FarmTabBtn.Position = UDim2.new(0, 0, 0, 0)
 FarmTabBtn.BorderSizePixel = 0
 FarmTabBtn.Font = Enum.Font.GothamBold
-FarmTabBtn.TextSize = 11
+FarmTabBtn.TextSize = 10
 FarmTabBtn.Text = "Farm"
 FarmTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 FarmTabBtn.Parent = TabBar
 Instance.new("UICorner", FarmTabBtn).CornerRadius = UDim.new(0, 3)
 
 local SettingTabBtn = Instance.new("TextButton")
-SettingTabBtn.Size = UDim2.new(0.5, -3, 1, 0)
-SettingTabBtn.Position = UDim2.new(0.5, 3, 0, 0)
+SettingTabBtn.Size = UDim2.new(1/3, -3, 1, 0)
+SettingTabBtn.Position = UDim2.new(1/3, 1.5, 0, 0)
 SettingTabBtn.BorderSizePixel = 0
 SettingTabBtn.Font = Enum.Font.GothamBold
-SettingTabBtn.TextSize = 11
+SettingTabBtn.TextSize = 10
 SettingTabBtn.Text = "Setting"
 SettingTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 SettingTabBtn.Parent = TabBar
 Instance.new("UICorner", SettingTabBtn).CornerRadius = UDim.new(0, 3)
+
+local MasteryTabBtn = Instance.new("TextButton")
+MasteryTabBtn.Size = UDim2.new(1/3, -3, 1, 0)
+MasteryTabBtn.Position = UDim2.new(2/3, 3, 0, 0)
+MasteryTabBtn.BorderSizePixel = 0
+MasteryTabBtn.Font = Enum.Font.GothamBold
+MasteryTabBtn.TextSize = 10
+MasteryTabBtn.Text = "Mastery"
+MasteryTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MasteryTabBtn.Parent = TabBar
+Instance.new("UICorner", MasteryTabBtn).CornerRadius = UDim.new(0, 3)
 
 local function CreateTabPage(name)
     local frame = Instance.new("ScrollingFrame")
@@ -800,7 +1090,7 @@ local function CreateTabPage(name)
     frame.BackgroundTransparency = 1
     frame.BorderSizePixel = 0
     frame.ScrollBarThickness = 3
-    frame.CanvasSize = UDim2.new(0, 0, 0, 300)
+    frame.CanvasSize = UDim2.new(0, 0, 0, 480)
     frame.Parent = MainFrame
 
     local layout = Instance.new("UIListLayout")
@@ -817,13 +1107,16 @@ end
 
 local FarmPage = CreateTabPage("Farm")
 local SettingPage = CreateTabPage("Setting")
+local MasteryPage = CreateTabPage("Mastery")
 
 local function SwitchTab(tabName)
-    local isFarm = (tabName == "Farm")
-    FarmPage.Visible = isFarm
-    SettingPage.Visible = not isFarm
-    FarmTabBtn.BackgroundColor3 = isFarm and Color3.fromRGB(52, 95, 185) or Color3.fromRGB(34, 34, 46)
-    SettingTabBtn.BackgroundColor3 = (not isFarm) and Color3.fromRGB(52, 95, 185) or Color3.fromRGB(34, 34, 46)
+    FarmPage.Visible = (tabName == "Farm")
+    SettingPage.Visible = (tabName == "Setting")
+    MasteryPage.Visible = (tabName == "Mastery")
+
+    FarmTabBtn.BackgroundColor3 = (tabName == "Farm") and Color3.fromRGB(52, 95, 185) or Color3.fromRGB(34, 34, 46)
+    SettingTabBtn.BackgroundColor3 = (tabName == "Setting") and Color3.fromRGB(52, 95, 185) or Color3.fromRGB(34, 34, 46)
+    MasteryTabBtn.BackgroundColor3 = (tabName == "Mastery") and Color3.fromRGB(52, 95, 185) or Color3.fromRGB(34, 34, 46)
 end
 
 FarmTabBtn.MouseButton1Click:Connect(function()
@@ -831,6 +1124,9 @@ FarmTabBtn.MouseButton1Click:Connect(function()
 end)
 SettingTabBtn.MouseButton1Click:Connect(function()
     SwitchTab("Setting")
+end)
+MasteryTabBtn.MouseButton1Click:Connect(function()
+    SwitchTab("Mastery")
 end)
 SwitchTab("Farm")
 
@@ -1001,6 +1297,66 @@ local function CreateRowBuilder(parentFrame)
         end
     end
 
+    local function AddSkillKeyRow(prefixLabel, keyMap, keyList, onKeysChanged)
+        local keys = keyList or FRUIT_KEYS
+        local row = Instance.new("Frame")
+        row.LayoutOrder = nextOrd()
+        row.Size = UDim2.new(1, 0, 0, 24)
+        row.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
+        row.BorderSizePixel = 0
+        row.Parent = parentFrame
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 3)
+
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(0.42, 0, 1, 0)
+        lbl.Position = UDim2.new(0, 6, 0, 0)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = prefixLabel
+        lbl.TextColor3 = Color3.fromRGB(220, 225, 240)
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextSize = 10
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.Parent = row
+
+        local keyBtns = {}
+        local count = #keys
+        for i, keyName in ipairs(keys) do
+            local kBtn = Instance.new("TextButton")
+            local widthScale = 0.56 / count
+            kBtn.Size = UDim2.new(widthScale, -3, 0, 20)
+            kBtn.Position = UDim2.new(0.43 + (i - 1) * widthScale, 1, 0.5, -10)
+            kBtn.BorderSizePixel = 0
+            kBtn.Font = Enum.Font.GothamBold
+            kBtn.TextSize = 10
+            kBtn.Text = keyName
+            kBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            kBtn.Parent = row
+            Instance.new("UICorner", kBtn).CornerRadius = UDim.new(0, 3)
+
+            local function paintKey()
+                local active = keyMap[keyName] == true
+                kBtn.BackgroundColor3 = active and Color3.fromRGB(40, 145, 75) or Color3.fromRGB(46, 46, 62)
+            end
+            paintKey()
+
+            kBtn.MouseButton1Click:Connect(function()
+                keyMap[keyName] = not (keyMap[keyName] == true)
+                paintKey()
+                if onKeysChanged then
+                    onKeysChanged()
+                end
+            end)
+
+            keyBtns[keyName] = paintKey
+        end
+
+        return function()
+            for _, paintFn in pairs(keyBtns) do
+                paintFn()
+            end
+        end
+    end
+
     local function AddLabel(txt, height)
         local lbl = Instance.new("TextLabel")
         lbl.LayoutOrder = nextOrd()
@@ -1021,12 +1377,14 @@ local function CreateRowBuilder(parentFrame)
         Toggle = AddToggle,
         Button = AddButton,
         Cycle = AddCycle,
+        SkillRow = AddSkillKeyRow,
         Label = AddLabel
     }
 end
 
 local FarmUI = CreateRowBuilder(FarmPage)
 local SettingUI = CreateRowBuilder(SettingPage)
+local MasteryUI = CreateRowBuilder(MasteryPage)
 
 -- ==================== TAB FARM ====================
 local weaponOpts = {"Melee", "Sword", "Gun", "Blox Fruit"}
@@ -1106,6 +1464,15 @@ local _, SetBringModeCycle = FarmUI.Cycle("Chế Độ Gom", bringModeOpts, star
 end)
 
 -- ==================== TAB SETTING ====================
+local _, SetSilentNPCUI = SettingUI.Toggle("Silent NPC", Config.SilentNPCEnabled, function(val)
+    Config.SilentNPCEnabled = val
+    if not val then
+        currentNPCTargetPart = nil
+    else
+        currentNPCTargetPart = SelectSilentNPCTarget()
+    end
+end)
+
 local heightOpts = {12, 18, 24, 32, 40}
 local startHeightIdx = table.find(heightOpts, Config.FarmHeight) or 3
 local _, SetHeightCycle = SettingUI.Cycle("Độ Cao Farm Quái", heightOpts, startHeightIdx, function(h)
@@ -1122,6 +1489,7 @@ local nearRangeOpts = {400, 700, 1200, 2000}
 local startNearRangeIdx = table.find(nearRangeOpts, Config.NearRange) or 2
 local _, SetNearRangeCycle = SettingUI.Cycle("Bán Kính Near", nearRangeOpts, startNearRangeIdx, function(rng)
     Config.NearRange = rng
+    Config.SilentMaxDist = rng
 end)
 
 local speedOpts = {200, 350, 500, 800}
@@ -1148,9 +1516,63 @@ SettingUI.Button("Lưu Setting", Color3.fromRGB(45, 135, 85), function()
     end
 end)
 
+-- ==================== TAB MASTERY ====================
+MasteryUI.Label("Melee (Z,X,C), Sword (Z,X), Gun (Z,X), Fruit (Z,X,C,V) tự đổi vũ khí & xả chiêu khi quái <= % máu.", 30)
+
+local hpPercentOpts = {100, 85, 70, 50, 35, 25, 15}
+
+-- Melee Mastery (Z, X, C)
+local _, SetMeleeMasteryUI = MasteryUI.Toggle("Mastery Melee Xài Chiêu", Config.MeleeMasteryEnabled, function(val)
+    Config.MeleeMasteryEnabled = val
+end)
+
+local startMeleeHPIdx = table.find(hpPercentOpts, Config.MeleeSkillHP) or 6
+local _, SetMeleeHPCycle = MasteryUI.Cycle("% Máu Quái (Melee)", hpPercentOpts, startMeleeHPIdx, function(pct)
+    Config.MeleeSkillHP = pct
+end)
+
+local RefreshMeleeKeyUI = MasteryUI.SkillRow("Phím Melee:", Config.MeleeSelectedKeys, MELEE_KEYS, SyncGlobalSkillLists)
+
+-- Sword Mastery (Z, X)
+local _, SetSwordMasteryUI = MasteryUI.Toggle("Mastery Sword Xài Chiêu", Config.SwordMasteryEnabled, function(val)
+    Config.SwordMasteryEnabled = val
+end)
+
+local startSwordHPIdx = table.find(hpPercentOpts, Config.SwordSkillHP) or 6
+local _, SetSwordHPCycle = MasteryUI.Cycle("% Máu Quái (Sword)", hpPercentOpts, startSwordHPIdx, function(pct)
+    Config.SwordSkillHP = pct
+end)
+
+local RefreshSwordKeyUI = MasteryUI.SkillRow("Phím Sword:", Config.SwordSelectedKeys, SHORT_WEAPON_KEYS, SyncGlobalSkillLists)
+
+-- Gun Mastery (Z, X)
+local _, SetGunMasteryUI = MasteryUI.Toggle("Mastery Gun Xài Chiêu", Config.GunMasteryEnabled, function(val)
+    Config.GunMasteryEnabled = val
+end)
+
+local startGunHPIdx = table.find(hpPercentOpts, Config.GunSkillHP) or 6
+local _, SetGunHPCycle = MasteryUI.Cycle("% Máu Quái (Gun)", hpPercentOpts, startGunHPIdx, function(pct)
+    Config.GunSkillHP = pct
+end)
+
+local RefreshGunKeyUI = MasteryUI.SkillRow("Phím Gun:", Config.GunSelectedKeys, SHORT_WEAPON_KEYS, SyncGlobalSkillLists)
+
+-- Fruit Mastery (Z, X, C, V)
+local _, SetFruitMasteryUI = MasteryUI.Toggle("Mastery Fruit Xài Chiêu", Config.FruitMasteryEnabled, function(val)
+    Config.FruitMasteryEnabled = val
+end)
+
+local startFruitHPIdx = table.find(hpPercentOpts, Config.FruitSkillHP) or 6
+local _, SetFruitHPCycle = MasteryUI.Cycle("% Máu Quái (Fruit)", hpPercentOpts, startFruitHPIdx, function(pct)
+    Config.FruitSkillHP = pct
+end)
+
+local RefreshFruitKeyUI = MasteryUI.SkillRow("Phím Fruit:", Config.FruitSelectedKeys, FRUIT_KEYS, SyncGlobalSkillLists)
+
 -- Đồng bộ giao diện theo cấu hình đã nạp
 SetWeaponCycle(weaponOpts, Config.WeaponType)
 SetAutoV4UI(Config.AutoV4)
+SetSilentNPCUI(Config.SilentNPCEnabled)
 SetBringUI(Config.BringEnabled)
 SetBringModeCycle(bringModeOpts, Config.BringMode)
 SetHeightCycle(heightOpts, Config.FarmHeight)
@@ -1158,6 +1580,18 @@ SetBringRangeCycle(bringRangeOpts, Config.BringRange)
 SetNearRangeCycle(nearRangeOpts, Config.NearRange)
 SetSpeedCycle(speedOpts, Config.TweenSpeed)
 SetVisualHitboxUI(Config.VisualHitbox)
+SetMeleeMasteryUI(Config.MeleeMasteryEnabled)
+SetMeleeHPCycle(hpPercentOpts, Config.MeleeSkillHP)
+RefreshMeleeKeyUI()
+SetSwordMasteryUI(Config.SwordMasteryEnabled)
+SetSwordHPCycle(hpPercentOpts, Config.SwordSkillHP)
+RefreshSwordKeyUI()
+SetGunMasteryUI(Config.GunMasteryEnabled)
+SetGunHPCycle(hpPercentOpts, Config.GunSkillHP)
+RefreshGunKeyUI()
+SetFruitMasteryUI(Config.FruitMasteryEnabled)
+SetFruitHPCycle(hpPercentOpts, Config.FruitSkillHP)
+RefreshFruitKeyUI()
 
 -- Đồng bộ trạng thái nút UI khi bật chéo Selected / Near
 task.spawn(function()
@@ -1179,7 +1613,7 @@ end)
 -- Quét tự động lần đầu sau khi load
 task.delay(0.5, DoScan)
 
--- Vòng lặp Auto Farm chính (ổn định vị trí, không rung lắc)
+-- Vòng lặp Auto Farm chính (ổn định vị trí, không rung lắc + Silent NPC + tự đổi vũ khí khi farm Mastery)
 task.spawn(function()
     while task.wait(0.05) do
         if Config.AutoSelected or Config.AutoNear then
@@ -1192,16 +1626,22 @@ task.spawn(function()
                 end
 
                 if IsAliveMob(target) then
+                    currentFarmTarget = target
                     local anchor = target.HumanoidRootPart.Position
                     activeAnchorPos = anchor
                     local targetName = target.Name
 
                     while (Config.AutoSelected or Config.AutoNear) and IsAliveMob(target) do
+                        currentFarmTarget = target
                         AutoHaki()
-                        EquipWeapon(GetActiveWeapon())
                         BringMobs(anchor, targetName)
                         if Config.AutoV4 then
                             TryActivateV4()
+                        end
+
+                        local usingMastery = TryMasterySkills(target)
+                        if not usingMastery then
+                            EquipWeapon(GetActiveWeapon())
                         end
 
                         local hrp = GetHRP()
@@ -1215,17 +1655,28 @@ task.spawn(function()
                             end
                         end
 
-                        AttackClick()
+                        if not usingMastery then
+                            AttackClick()
+                        end
                         task.wait(0.05)
                     end
+
+                    -- Hết quái hoặc quái vừa chết: trả về vũ khí farm chính
+                    currentFarmTarget = nil
+                    isMasterySwitched = false
+                    EquipWeapon(GetActiveWeapon())
                 else
+                    currentFarmTarget = nil
                     activeAnchorPos = nil
+                    isMasterySwitched = false
                     ClearVisualHitboxes()
                     task.wait(0.25)
                 end
             end)
         else
+            currentFarmTarget = nil
             activeAnchorPos = nil
+            isMasterySwitched = false
             ClearVisualHitboxes()
             task.wait(0.2)
         end
