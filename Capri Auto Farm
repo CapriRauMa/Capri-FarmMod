@@ -1,137 +1,32 @@
--- Capri Farm Standalone UI: 3 Tab (Farm, Setting, Mastery) + Mastery Melee/Sword/Gun/Fruit + Silent NPC (Capri Menu)
-
-getgenv().Config = getgenv().Config or {
-    AutoBounty = true,
-    AutoEnablePVP = true,
-    AutoFlee = false,
-    AutoFleeHP = 30,
-    AutoHaki = true,
-    AutoKen = true,
-    AutoLoadConfig = true,
-    AutoSaveConfig = true,
-    AutoSoru = false,
-    AutoV3 = true,
-    AutoV4 = false,
-    ConfigVersion = 2,
-    Dragonstorm = false,
-    ESP = true,
-    ESP_FontSize = 16,
-    ESP_ShowDistance = true,
-    ESP_ShowHealth = true,
-    ESP_ShowLevel = false,
-    ESP_ShowName = false,
-    ESP_ShowPVP = true,
-    FPSBoost = false,
-    FastAttack = false,
-    FruitM1 = true,
-    FruitSkills = {
-        "C",
-        "V",
-        "X",
-        "Z",
-    },
-    GunSkills = {
-        "X",
-        "Z",
-    },
-    Hold = {
-        ["Blox Fruit"] = {
-            C = 0.1,
-            F = 0.1,
-            V = 0.1,
-            X = 0.1,
-            Z = 0.1,
-        },
-        Gun = {
-            C = 0.1,
-            F = 0.1,
-            V = 0.1,
-            X = 0.1,
-            Z = 0.1,
-        },
-        Melee = {
-            C = 0.1,
-            F = 0.1,
-            V = 0.1,
-            X = 0.1,
-            Z = 0.1,
-        },
-        Sword = {
-            C = 0.1,
-            F = 0.1,
-            V = 0.1,
-            X = 0.1,
-            Z = 0.1,
-        },
-    },
-    HoldWeapon = "Melee",
-    HopBountyRange = "> 25M",
-    HopPlayerRange = "9-12",
-    LockTime = 90,
-    MaxStaySeconds = 600,
-    MeleeSkills = {
-        "C",
-        "X",
-        "Z",
-    },
-    SelectTeam = "Pirates",
-    ServerRegion = "Singapore",
-    SwordSkills = {
-        "X",
-        "Z",
-    },
-    V4Only = {
-        ["Blox Fruit"] = false,
-        Gun = true,
-        Melee = false,
-        Sword = true,
-    },
-    VoidFruitM1 = false,
-    WaterWalk = false,
-}
-
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
+local CONFIG_FILE = "Capri_Combat_V4.json"
 
--- Chạy kèm Fast Attack khi khởi động Capri Farm
-task.spawn(function()
-    local ok, err = pcall(function()
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/CapriRauMa/Capri/refs/heads/main/Fast%20attack"))()
-    end)
-    if not ok then
-        warn("Không tải được Fast attack:", err)
-    end
-end)
+local FRUIT_KEYS = { "Z", "X", "C", "V" }
+local MELEE_KEYS = { "Z", "X", "C" }
+local SHORT_WEAPON_KEYS = { "Z", "X" }
 
--- Anti-AFK
-pcall(function()
-    LocalPlayer.Idled:Connect(function()
-        VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-        task.wait(0.4)
-        VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-    end)
-end)
+local Defaults = {
+    FastAttackMode = "Mode 2",
+    FastAttackMobs = false,
+    GunM1Mobs = false,
+    AutoV4 = false,
+    Theme = "Dark",
 
-local FRUIT_KEYS = {"Z", "X", "C", "V"}
-local MELEE_KEYS = {"Z", "X", "C"}
-local SHORT_WEAPON_KEYS = {"Z", "X"}
-
--- Biến cấu hình
-local Config = {
+    -- Chuyển từ script Capri Farm trước vào WindUI
     WeaponType = "Melee",
     SelectedMob = nil,
     AutoSelected = false,
     AutoNear = false,
-    AutoV4 = false,
     SilentNPCEnabled = false,
     SilentMaxDist = 700,
     SilentPrediction = 0.165,
@@ -157,13 +52,29 @@ local Config = {
 
     FruitMasteryEnabled = false,
     FruitSkillHP = 30,
-    FruitSelectedKeys = { Z = true, X = true, C = true, V = true }
+    FruitSelectedKeys = { Z = true, X = true, C = true, V = true },
 }
 
-local SETTINGS_FILE = "CapriFarm_Settings.json"
+local function CloneValue(v)
+    if type(v) == "table" then
+        local copy = {}
+        for k, val in pairs(v) do
+            copy[k] = CloneValue(val)
+        end
+        return copy
+    end
+    return v
+end
+
+for key, defaultValue in pairs(Defaults) do
+    if _G[key] == nil then
+        _G[key] = CloneValue(defaultValue)
+    end
+end
 
 local function BuildSkillList(keyMap, keyList)
     local out = {}
+    if type(keyMap) ~= "table" then return out end
     for _, k in ipairs(keyList) do
         if keyMap[k] then
             table.insert(out, k)
@@ -172,170 +83,103 @@ local function BuildSkillList(keyMap, keyList)
     return out
 end
 
-local function SyncGlobalSkillLists()
-    getgenv().Config.MeleeSkills = BuildSkillList(Config.MeleeSelectedKeys, MELEE_KEYS)
-    getgenv().Config.SwordSkills = BuildSkillList(Config.SwordSelectedKeys, SHORT_WEAPON_KEYS)
-    getgenv().Config.GunSkills = BuildSkillList(Config.GunSelectedKeys, SHORT_WEAPON_KEYS)
-    getgenv().Config.FruitSkills = BuildSkillList(Config.FruitSelectedKeys, FRUIT_KEYS)
+local function SyncSkillGlobals()
+    _G.MeleeSkills = BuildSkillList(_G.MeleeSelectedKeys, MELEE_KEYS)
+    _G.SwordSkills = BuildSkillList(_G.SwordSelectedKeys, SHORT_WEAPON_KEYS)
+    _G.GunSkills = BuildSkillList(_G.GunSelectedKeys, SHORT_WEAPON_KEYS)
+    _G.FruitSkills = BuildSkillList(_G.FruitSelectedKeys, FRUIT_KEYS)
 end
 
-local function SaveSettings()
-    local payload = {
-        WeaponType = Config.WeaponType,
-        BringEnabled = Config.BringEnabled,
-        BringMode = Config.BringMode,
-        BringRange = Config.BringRange,
-        NearRange = Config.NearRange,
-        FarmHeight = Config.FarmHeight,
-        TweenSpeed = Config.TweenSpeed,
-        AutoV4 = Config.AutoV4,
-        SilentNPCEnabled = Config.SilentNPCEnabled,
-        VisualHitbox = Config.VisualHitbox,
-        MeleeMasteryEnabled = Config.MeleeMasteryEnabled,
-        MeleeSkillHP = Config.MeleeSkillHP,
-        MeleeSelectedKeys = Config.MeleeSelectedKeys,
-        SwordMasteryEnabled = Config.SwordMasteryEnabled,
-        SwordSkillHP = Config.SwordSkillHP,
-        SwordSelectedKeys = Config.SwordSelectedKeys,
-        GunMasteryEnabled = Config.GunMasteryEnabled,
-        GunSkillHP = Config.GunSkillHP,
-        GunSelectedKeys = Config.GunSelectedKeys,
-        FruitMasteryEnabled = Config.FruitMasteryEnabled,
-        FruitSkillHP = Config.FruitSkillHP,
-        FruitSelectedKeys = Config.FruitSelectedKeys
-    }
+SyncSkillGlobals()
 
-    getgenv().CapriFarmSavedSettings = payload
-    getgenv().Config.AutoV4 = Config.AutoV4
-    getgenv().Config.HoldWeapon = Config.WeaponType
-    SyncGlobalSkillLists()
-
-    if type(writefile) == "function" then
-        local ok = pcall(function()
-            writefile(SETTINGS_FILE, HttpService:JSONEncode(payload))
-        end)
-        return ok
+local function CollectConfig()
+    local data = {}
+    for key in pairs(Defaults) do
+        data[key] = CloneValue(_G[key])
     end
-    return true
+    return data
 end
 
-local function CopyKeyMap(srcMap, targetMap, keyList)
-    if type(srcMap) ~= "table" then return end
-    for _, k in ipairs(keyList) do
-        if type(srcMap[k]) == "boolean" then
-            targetMap[k] = srcMap[k]
-        end
-    end
+local function SaveConfig()
+    if typeof(writefile) ~= "function" then return end
+    pcall(function()
+        writefile(CONFIG_FILE, HttpService:JSONEncode(CollectConfig()))
+    end)
 end
 
-local function LoadSettings()
-    local loaded = nil
-
-    if type(isfile) == "function" and type(readfile) == "function" then
-        pcall(function()
-            if isfile(SETTINGS_FILE) then
-                local raw = readfile(SETTINGS_FILE)
-                if raw and raw ~= "" then
-                    loaded = HttpService:JSONDecode(raw)
+local function LoadConfig()
+    if typeof(isfile) ~= "function" or typeof(readfile) ~= "function" then return end
+    if not isfile(CONFIG_FILE) then return end
+    local ok, decoded = pcall(function()
+        return HttpService:JSONDecode(readfile(CONFIG_FILE))
+    end)
+    if ok and type(decoded) == "table" then
+        for key, defaultValue in pairs(Defaults) do
+            if decoded[key] ~= nil then
+                if type(defaultValue) == "table" and type(decoded[key]) == "table" then
+                    local merged = CloneValue(defaultValue)
+                    for k, v in pairs(decoded[key]) do
+                        merged[k] = v
+                    end
+                    _G[key] = merged
+                else
+                    _G[key] = decoded[key]
                 end
             end
-        end)
+        end
+        SyncSkillGlobals()
     end
-
-    if type(loaded) ~= "table" and type(getgenv().CapriFarmSavedSettings) == "table" then
-        loaded = getgenv().CapriFarmSavedSettings
-    end
-
-    if type(loaded) == "table" then
-        if type(loaded.WeaponType) == "string" then Config.WeaponType = loaded.WeaponType end
-        if type(loaded.BringEnabled) == "boolean" then Config.BringEnabled = loaded.BringEnabled end
-        if type(loaded.BringMode) == "string" then Config.BringMode = loaded.BringMode end
-        if type(loaded.BringRange) == "number" then Config.BringRange = loaded.BringRange end
-        if type(loaded.NearRange) == "number" then Config.NearRange = loaded.NearRange end
-        if type(loaded.FarmHeight) == "number" then Config.FarmHeight = loaded.FarmHeight end
-        if type(loaded.TweenSpeed) == "number" then Config.TweenSpeed = loaded.TweenSpeed end
-        if type(loaded.AutoV4) == "boolean" then Config.AutoV4 = loaded.AutoV4 end
-        if type(loaded.SilentNPCEnabled) == "boolean" then Config.SilentNPCEnabled = loaded.SilentNPCEnabled end
-        if type(loaded.VisualHitbox) == "boolean" then Config.VisualHitbox = loaded.VisualHitbox end
-
-        if type(loaded.MeleeMasteryEnabled) == "boolean" then Config.MeleeMasteryEnabled = loaded.MeleeMasteryEnabled end
-        if type(loaded.MeleeSkillHP) == "number" then Config.MeleeSkillHP = loaded.MeleeSkillHP end
-        CopyKeyMap(loaded.MeleeSelectedKeys, Config.MeleeSelectedKeys, MELEE_KEYS)
-
-        if type(loaded.SwordMasteryEnabled) == "boolean" then Config.SwordMasteryEnabled = loaded.SwordMasteryEnabled end
-        if type(loaded.SwordSkillHP) == "number" then Config.SwordSkillHP = loaded.SwordSkillHP end
-        CopyKeyMap(loaded.SwordSelectedKeys, Config.SwordSelectedKeys, SHORT_WEAPON_KEYS)
-
-        if type(loaded.GunMasteryEnabled) == "boolean" then Config.GunMasteryEnabled = loaded.GunMasteryEnabled end
-        if type(loaded.GunSkillHP) == "number" then Config.GunSkillHP = loaded.GunSkillHP end
-        CopyKeyMap(loaded.GunSelectedKeys, Config.GunSelectedKeys, SHORT_WEAPON_KEYS)
-
-        if type(loaded.FruitMasteryEnabled) == "boolean" then Config.FruitMasteryEnabled = loaded.FruitMasteryEnabled end
-        if type(loaded.FruitSkillHP) == "number" then Config.FruitSkillHP = loaded.FruitSkillHP end
-        CopyKeyMap(loaded.FruitSelectedKeys, Config.FruitSelectedKeys, FRUIT_KEYS)
-    end
-
-    getgenv().Config.AutoV4 = Config.AutoV4
-    getgenv().Config.HoldWeapon = Config.WeaponType
-    SyncGlobalSkillLists()
 end
 
-LoadSettings()
+LoadConfig()
 
+-- Anti-AFK
+pcall(function()
+    LocalPlayer.Idled:Connect(function()
+        VirtualUser:Button2Down(Vector2.new(0, 0), Workspace.CurrentCamera.CFrame)
+        task.wait(0.4)
+        VirtualUser:Button2Up(Vector2.new(0, 0), Workspace.CurrentCamera.CFrame)
+    end)
+end)
+
+local WindUI = loadstring(game:HttpGet("https://rjr-loader.top/script/www"))()
+local themes = WindUI:GetThemes()
+if not themes[_G.Theme] then
+    _G.Theme = "Dark"
+end
+WindUI:SetTheme(_G.Theme)
+
+local Window = WindUI:CreateWindow({
+    Title = "Capri Menu",
+    Author = "Custom Module",
+    Folder = "WindUI",
+    Size = UDim2.fromOffset(520, 380),
+    Theme = _G.Theme,
+    HideSearchBar = true,
+    ToggleKey = Enum.KeyCode.G,
+})
+
+local MainTab = Window:Tab({ Title = "Main" })
+local SettingTab = Window:Tab({ Title = "Setting" })
+local MasteryTab = Window:Tab({ Title = "Mastery" })
+
+local function Bind(key, callback)
+    return function(value)
+        _G[key] = value
+        if callback then
+            callback(value)
+        end
+        SaveConfig()
+    end
+end
+
+-- Trạng thái dùng chung giữa Combat, Farm, Bring & Silent NPC
 local CurrentTween = nil
 local isTweening = false
 local activeAnchorPos = nil
 local currentFarmTarget = nil
 local currentNPCTargetPart = nil
-local lastV4Trigger = 0
 local lastSkillCast = 0
-local isMasterySwitched = false
-
-local VisualFolder = workspace:FindFirstChild("CapriVisualHitboxes")
-if not VisualFolder then
-    VisualFolder = Instance.new("Folder")
-    VisualFolder.Name = "CapriVisualHitboxes"
-    VisualFolder.Parent = workspace
-end
-
-local function ClearVisualHitboxes()
-    pcall(function()
-        VisualFolder:ClearAllChildren()
-    end)
-end
-
-local function UpdateVisualHitbox(mobModel, anchorCFrame)
-    if not Config.VisualHitbox or not mobModel or not mobModel.Parent or not anchorCFrame then
-        return
-    end
-
-    local visName = "Vis_" .. tostring(mobModel:GetDebugId())
-    local boxPart = VisualFolder:FindFirstChild(visName)
-    if not boxPart then
-        boxPart = Instance.new("Part")
-        boxPart.Name = visName
-        boxPart.Anchored = true
-        boxPart.CanCollide = false
-        boxPart.CanTouch = false
-        boxPart.CanQuery = false
-        boxPart.Massless = true
-        boxPart.Material = Enum.Material.ForceField
-        boxPart.Color = Color3.fromRGB(255, 85, 130)
-        boxPart.Transparency = 0.78
-        boxPart.Size = Vector3.new(10, 10, 10)
-
-        local adorn = Instance.new("SelectionBox")
-        adorn.Name = "Outline"
-        adorn.Color3 = Color3.fromRGB(255, 105, 155)
-        adorn.LineThickness = 0.04
-        adorn.Adornee = boxPart
-        adorn.Parent = boxPart
-
-        boxPart.Parent = VisualFolder
-    end
-
-    boxPart.CFrame = anchorCFrame
-end
 
 local function GetChar()
     return LocalPlayer.Character
@@ -369,7 +213,7 @@ end
 local function FindNearestMob(maxDist, onlyName)
     local hrp = GetHRP()
     if not hrp then return nil end
-    local enemies = workspace:FindFirstChild("Enemies")
+    local enemies = Workspace:FindFirstChild("Enemies")
     if not enemies then return nil end
 
     local bestMob = nil
@@ -388,16 +232,90 @@ local function FindNearestMob(maxDist, onlyName)
     return bestMob
 end
 
--- Target Selector NPC kiểu Capri Menu (Silent NPC)
+local VisualFolder = Workspace:FindFirstChild("CapriVisualHitboxes")
+if not VisualFolder then
+    VisualFolder = Instance.new("Folder")
+    VisualFolder.Name = "CapriVisualHitboxes"
+    VisualFolder.Parent = Workspace
+end
+
+local function ClearVisualHitboxes()
+    pcall(function()
+        VisualFolder:ClearAllChildren()
+    end)
+end
+
+local function UpdateVisualHitbox(mobModel, anchorCFrame)
+    if not _G.VisualHitbox or not mobModel or not mobModel.Parent or not anchorCFrame then
+        return
+    end
+
+    local visName = "Vis_" .. tostring(mobModel:GetDebugId())
+    local boxPart = VisualFolder:FindFirstChild(visName)
+    if not boxPart then
+        boxPart = Instance.new("Part")
+        boxPart.Name = visName
+        boxPart.Anchored = true
+        boxPart.CanCollide = false
+        boxPart.CanTouch = false
+        boxPart.CanQuery = false
+        boxPart.Massless = true
+        boxPart.Material = Enum.Material.ForceField
+        boxPart.Color = Color3.fromRGB(255, 85, 130)
+        boxPart.Transparency = 0.78
+        boxPart.Size = Vector3.new(10, 10, 10)
+
+        local adorn = Instance.new("SelectionBox")
+        adorn.Name = "Outline"
+        adorn.Color3 = Color3.fromRGB(255, 105, 155)
+        adorn.LineThickness = 0.04
+        adorn.Adornee = boxPart
+        adorn.Parent = boxPart
+
+        boxPart.Parent = VisualFolder
+    end
+
+    boxPart.CFrame = anchorCFrame
+end
+
+local function ClearTelePart()
+    local char = GetChar()
+    if char and char:FindFirstChild("PartTele") then
+        pcall(function() char.PartTele:Destroy() end)
+    end
+end
+
+local function StopMovement()
+    isTweening = false
+    activeAnchorPos = nil
+    currentFarmTarget = nil
+    currentNPCTargetPart = nil
+    ClearVisualHitboxes()
+    if CurrentTween then
+        pcall(function() CurrentTween:Cancel() end)
+        CurrentTween = nil
+    end
+    ClearTelePart()
+    local hrp = GetHRP()
+    if hrp then
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        if hrp:FindFirstChild("BodyClip") then
+            pcall(function() hrp.BodyClip:Destroy() end)
+        end
+    end
+end
+
+-- ==================== SILENT NPC ====================
 local function SelectSilentNPCTarget()
-    if not Config.SilentNPCEnabled then
+    if not _G.SilentNPCEnabled then
         return nil
     end
 
     if IsAliveMob(currentFarmTarget) then
         local hrp = currentFarmTarget:FindFirstChild("HumanoidRootPart")
         local myRoot = GetHRP()
-        if hrp and (not myRoot or (hrp.Position - myRoot.Position).Magnitude <= math.max(Config.SilentMaxDist, Config.NearRange)) then
+        if hrp and (not myRoot or (hrp.Position - myRoot.Position).Magnitude <= math.max(_G.SilentMaxDist or 700, _G.NearRange or 700)) then
             return hrp
         end
     end
@@ -405,18 +323,18 @@ local function SelectSilentNPCTarget()
     local root = GetHRP()
     if not root then return nil end
 
-    local maxRange = math.max(Config.SilentMaxDist or 700, Config.NearRange or 700)
+    local maxRange = math.max(_G.SilentMaxDist or 700, _G.NearRange or 700)
     local bestPart = nil
     local shortest = maxRange
 
     local potential = {}
-    local enemies = workspace:FindFirstChild("Enemies")
+    local enemies = Workspace:FindFirstChild("Enemies")
     if enemies then
         for _, e in ipairs(enemies:GetChildren()) do
             table.insert(potential, e)
         end
     end
-    for _, obj in ipairs(workspace:GetChildren()) do
+    for _, obj in ipairs(Workspace:GetChildren()) do
         if obj:IsA("Model") and obj ~= GetChar() then
             local hum = obj:FindFirstChildOfClass("Humanoid")
             local hrp = obj:FindFirstChild("HumanoidRootPart")
@@ -447,17 +365,16 @@ task.spawn(function()
     end
 end)
 
--- Hook __namecall kiểu Capri Menu cho Silent NPC
 local oldNamecall
 pcall(function()
     if hookmetamethod and getnamecallmethod then
         oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
             local method = getnamecallmethod()
-            local args = {...}
-            if not checkcaller() and Config.SilentNPCEnabled and currentNPCTargetPart and currentNPCTargetPart.Parent then
+            local args = { ... }
+            if not checkcaller() and _G.SilentNPCEnabled and currentNPCTargetPart and currentNPCTargetPart.Parent then
                 if method == "FireServer" or method == "InvokeServer" then
                     local vel = currentNPCTargetPart.AssemblyLinearVelocity or currentNPCTargetPart.Velocity or Vector3.zero
-                    local pred = currentNPCTargetPart.Position + (vel * Config.SilentPrediction)
+                    local pred = currentNPCTargetPart.Position + (vel * (_G.SilentPrediction or 0.165))
                     for i, v in ipairs(args) do
                         if typeof(v) == "Vector3" then
                             args[i] = pred
@@ -473,77 +390,7 @@ pcall(function()
     end
 end)
 
-local function IsV4Ready()
-    local char = GetChar()
-    if not char then return false end
-
-    local awakening = char:FindFirstChild("Awakening") or char:FindFirstChild("RaceV4") or char:FindFirstChild("V4Active")
-    if awakening then
-        if awakening:IsA("BoolValue") then
-            return not awakening.Value
-        elseif awakening:IsA("NumberValue") or awakening:IsA("IntValue") then
-            return awakening.Value <= 0
-        end
-    end
-
-    for _, container in ipairs({char, LocalPlayer}) do
-        for _, child in ipairs(container:GetChildren()) do
-            local lower = string.lower(child.Name)
-            if string.find(lower, "v4") or string.find(lower, "awaken") or string.find(lower, "energy") or string.find(lower, "meter") then
-                if child:IsA("BoolValue") and child.Value == true then
-                    return true
-                elseif child:IsA("NumberValue") or child:IsA("IntValue") then
-                    if child.Value >= 100 then
-                        return true
-                    end
-                end
-            end
-        end
-    end
-
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if playerGui then
-        for _, desc in ipairs(playerGui:GetDescendants()) do
-            local lowerName = string.lower(desc.Name)
-            if (string.find(lowerName, "v4") or string.find(lowerName, "awaken") or string.find(lowerName, "race")) and (desc:IsA("Frame") or desc:IsA("ImageLabel")) then
-                local sizeX = desc.Size.X.Scale
-                if sizeX and sizeX >= 0.99 then
-                    return true
-                end
-            end
-        end
-    end
-
-    return true
-end
-
-local function TryActivateV4()
-    if not Config.AutoV4 then return end
-    local now = os.clock()
-    if now - lastV4Trigger < 1.2 then return end
-
-    local char = GetChar()
-    local hum = GetHum()
-    if not (char and hum and hum.Health > 0) then return end
-
-    if not IsV4Ready() then return end
-    lastV4Trigger = now
-
-    pcall(function()
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Y, false, game)
-        task.wait(0.05)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Y, false, game)
-    end)
-
-    pcall(function()
-        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-        local commE = remotes and remotes:FindFirstChild("CommE")
-        if commE and commE:IsA("RemoteEvent") then
-            commE:FireServer("ActivateV4")
-        end
-    end)
-end
-
+-- ==================== HAKI, WEAPON & MASTERY ====================
 local function AutoHaki()
     local char = GetChar()
     if char and not char:FindFirstChild("HasBuso") then
@@ -575,7 +422,7 @@ local function GetWeaponByType(wType)
 end
 
 local function GetActiveWeapon()
-    local wType = Config.WeaponType
+    local wType = _G.WeaponType or "Melee"
     return GetWeaponByType(wType) or wType
 end
 
@@ -604,50 +451,47 @@ local function EquipWeapon(weaponName)
     end
 end
 
-local function PressSkillKey(keyStr, holdDuration)
+local function PressSkillKey(keyStr)
     local keyCode = Enum.KeyCode[string.upper(tostring(keyStr))]
     if not keyCode then return end
-    local holdTime = tonumber(holdDuration) or 0.1
     pcall(function()
         VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-        task.wait(math.max(holdTime, 0.03))
+        task.wait(0.08)
         VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
     end)
 end
 
--- Xác định loại vũ khí Mastery đang khả dụng theo % máu quái
 local function ResolveMasteryMode(targetMob)
     if not IsAliveMob(targetMob) then
         return nil, nil
     end
 
     local hpPct = GetMobHPPercent(targetMob)
-
     local candidates = {
         {
             wType = "Blox Fruit",
-            enabled = Config.FruitMasteryEnabled,
-            hpLimit = Config.FruitSkillHP,
-            skills = BuildSkillList(Config.FruitSelectedKeys, FRUIT_KEYS)
+            enabled = _G.FruitMasteryEnabled,
+            hpLimit = _G.FruitSkillHP or 30,
+            skills = BuildSkillList(_G.FruitSelectedKeys, FRUIT_KEYS),
         },
         {
             wType = "Melee",
-            enabled = Config.MeleeMasteryEnabled,
-            hpLimit = Config.MeleeSkillHP,
-            skills = BuildSkillList(Config.MeleeSelectedKeys, MELEE_KEYS)
+            enabled = _G.MeleeMasteryEnabled,
+            hpLimit = _G.MeleeSkillHP or 30,
+            skills = BuildSkillList(_G.MeleeSelectedKeys, MELEE_KEYS),
         },
         {
             wType = "Sword",
-            enabled = Config.SwordMasteryEnabled,
-            hpLimit = Config.SwordSkillHP,
-            skills = BuildSkillList(Config.SwordSelectedKeys, SHORT_WEAPON_KEYS)
+            enabled = _G.SwordMasteryEnabled,
+            hpLimit = _G.SwordSkillHP or 30,
+            skills = BuildSkillList(_G.SwordSelectedKeys, SHORT_WEAPON_KEYS),
         },
         {
             wType = "Gun",
-            enabled = Config.GunMasteryEnabled,
-            hpLimit = Config.GunSkillHP,
-            skills = BuildSkillList(Config.GunSelectedKeys, SHORT_WEAPON_KEYS)
-        }
+            enabled = _G.GunMasteryEnabled,
+            hpLimit = _G.GunSkillHP or 30,
+            skills = BuildSkillList(_G.GunSelectedKeys, SHORT_WEAPON_KEYS),
+        },
     }
 
     for _, item in ipairs(candidates) do
@@ -661,20 +505,17 @@ end
 
 local function TryMasterySkills(targetMob)
     if not IsAliveMob(targetMob) then
-        isMasterySwitched = false
         return false
     end
 
     local masteryWeaponType, skills = ResolveMasteryMode(targetMob)
     if not masteryWeaponType or not skills then
-        isMasterySwitched = false
         return false
     end
 
     local targetToolName = GetWeaponByType(masteryWeaponType)
     if targetToolName then
         EquipWeapon(targetToolName)
-        isMasterySwitched = (Config.WeaponType ~= masteryWeaponType)
     end
 
     if UserInputService:GetFocusedTextBox() then
@@ -687,12 +528,10 @@ local function TryMasterySkills(targetMob)
     end
     lastSkillCast = now
 
-    local gCfg = getgenv().Config or {}
-    local holdMap = (type(gCfg.Hold) == "table" and type(gCfg.Hold[masteryWeaponType]) == "table") and gCfg.Hold[masteryWeaponType] or {}
     for _, sk in ipairs(skills) do
         if not IsAliveMob(targetMob) then break end
         EquipWeapon(targetToolName)
-        PressSkillKey(sk, holdMap[sk] or 0.1)
+        PressSkillKey(sk)
         task.wait(0.08)
     end
 
@@ -702,41 +541,13 @@ end
 local function AttackClick()
     pcall(function()
         VirtualUser:CaptureController()
-        VirtualUser:Button1Down(Vector2.new(1280, 672), workspace.CurrentCamera.CFrame)
+        VirtualUser:Button1Down(Vector2.new(1280, 672), Workspace.CurrentCamera.CFrame)
         task.wait(0.02)
-        VirtualUser:Button1Up(Vector2.new(1280, 672), workspace.CurrentCamera.CFrame)
+        VirtualUser:Button1Up(Vector2.new(1280, 672), Workspace.CurrentCamera.CFrame)
     end)
 end
 
-local function ClearTelePart()
-    local char = GetChar()
-    if char and char:FindFirstChild("PartTele") then
-        pcall(function() char.PartTele:Destroy() end)
-    end
-end
-
-local function StopMovement()
-    isTweening = false
-    isMasterySwitched = false
-    activeAnchorPos = nil
-    currentFarmTarget = nil
-    currentNPCTargetPart = nil
-    ClearVisualHitboxes()
-    if CurrentTween then
-        pcall(function() CurrentTween:Cancel() end)
-        CurrentTween = nil
-    end
-    ClearTelePart()
-    local hrp = GetHRP()
-    if hrp then
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-        if hrp:FindFirstChild("BodyClip") then
-            pcall(function() hrp.BodyClip:Destroy() end)
-        end
-    end
-end
-
+-- ==================== DI CHUYỂN & BRING MOBS ====================
 local function HoldStablePosition(desiredPos, lookAtPos)
     local hrp = GetHRP()
     local hum = GetHum()
@@ -795,21 +606,21 @@ local function MoveToCFrame(targetCF)
     end
 
     isTweening = true
-    local speed = math.max(tonumber(Config.TweenSpeed) or 350, 80)
+    local speed = math.max(tonumber(_G.TweenSpeed) or 350, 80)
     local duration = math.max(dist / speed, 0.04)
 
     if CurrentTween then
         pcall(function() CurrentTween:Cancel() end)
     end
 
-    CurrentTween = TweenService:Create(part, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = CFrame.new(targetCF.Position)})
+    CurrentTween = TweenService:Create(part, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = CFrame.new(targetCF.Position) })
     CurrentTween:Play()
 
     local elapsed = 0
     while isTweening and elapsed < duration do
         task.wait(0.03)
         elapsed += 0.03
-        if not (Config.AutoSelected or Config.AutoNear) then
+        if not (_G.AutoSelected or _G.AutoNear) then
             break
         end
         local curHRP = GetHRP()
@@ -831,9 +642,8 @@ local function MoveToCFrame(targetCF)
     ClearTelePart()
 end
 
--- Khóa trọng lực & va chạm ổn định khi farm (không giật)
 RunService.Stepped:Connect(function()
-    if Config.AutoSelected or Config.AutoNear then
+    if _G.AutoSelected or _G.AutoNear then
         local char = GetChar()
         local hrp = GetHRP()
         if hrp then
@@ -864,7 +674,7 @@ end)
 
 local function ScanMobs()
     local hrp = GetHRP()
-    local enemies = workspace:FindFirstChild("Enemies")
+    local enemies = Workspace:FindFirstChild("Enemies")
     local counts = {}
     local list = {}
 
@@ -903,22 +713,23 @@ local function ScanMobs()
 end
 
 local function BringMobs(centerPos, targetName)
-    if not Config.BringEnabled or not centerPos then
+    if not _G.BringEnabled or not centerPos then
         ClearVisualHitboxes()
         return
     end
-    if not Config.VisualHitbox then
+    if not _G.VisualHitbox then
         ClearVisualHitboxes()
     end
 
-    local enemies = workspace:FindFirstChild("Enemies")
+    local enemies = Workspace:FindFirstChild("Enemies")
     if not enemies then return end
 
     pcall(function()
         sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
     end)
 
-    local isMixed = (Config.BringMode == "Mixed / All")
+    local isMixed = (_G.BringMode == "Mixed / All")
+    local maxRange = tonumber(_G.BringRange) or 350
     local idx = 0
 
     for _, mob in ipairs(enemies:GetChildren()) do
@@ -927,7 +738,7 @@ local function BringMobs(centerPos, targetName)
             if canBring then
                 local mhrp = mob.HumanoidRootPart
                 local mhum = mob.Humanoid
-                if (mhrp.Position - centerPos).Magnitude <= Config.BringRange then
+                if (mhrp.Position - centerPos).Magnitude <= maxRange then
                     idx += 1
                     local angle = (idx % 8) * (math.pi / 4)
                     local spread = Vector3.new(math.cos(angle) * 2.5, -2, math.sin(angle) * 2.5)
@@ -949,680 +760,602 @@ local function BringMobs(centerPos, targetName)
     end
 end
 
--- Xóa GUI cũ nếu chạy lại
-pcall(function()
-    local parentGui = game:GetService("CoreGui")
-    if parentGui:FindFirstChild("CapriFarmUI") then
-        parentGui.CapriFarmUI:Destroy()
-    end
-end)
-pcall(function()
-    local pg = LocalPlayer:FindFirstChild("PlayerGui")
-    if pg and pg:FindFirstChild("CapriFarmUI") then
-        pg.CapriFarmUI:Destroy()
-    end
-end)
+-- ==================== 1. FAST ATTACK MOBS ====================
+do
+    local M1_RANGE = 500
+    local Net = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net")
+    local RegisterAttack = Net:WaitForChild("RE/RegisterAttack")
+    local RegisterHit = Net:WaitForChild("RE/RegisterHit")
+    local RemoteSeed = Net:FindFirstChild("seed")
+    local State = { FoundRemote = nil, FoundRemoteId = nil }
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "CapriFarmUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-local okGui = pcall(function()
-    ScreenGui.Parent = game:GetService("CoreGui")
-end)
-if not okGui or not ScreenGui.Parent then
-    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
-
--- Icon Menu Hình Tròn (kéo thả + bấm mở/đóng)
-local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Name = "CapriFarmCircleIcon"
-ToggleBtn.Size = UDim2.new(0, 48, 0, 48)
-ToggleBtn.Position = UDim2.new(0, 14, 0, 115)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(28, 28, 40)
-ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleBtn.Font = Enum.Font.GothamBold
-ToggleBtn.TextSize = 10
-ToggleBtn.Text = "CAPRI"
-ToggleBtn.Active = true
-ToggleBtn.Parent = ScreenGui
-
-Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
-local tStroke = Instance.new("UIStroke", ToggleBtn)
-tStroke.Color = Color3.fromRGB(235, 64, 92)
-tStroke.Thickness = 2
-
--- Khung GUI Chính Hình Chữ Nhật (nhỏ gọn + kéo di chuyển tự do)
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "CapriFarmMainFrame"
-MainFrame.Size = UDim2.new(0, 326, 0, 260)
-MainFrame.Position = UDim2.new(0, 72, 0, 115)
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
-MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-MainFrame.Parent = ScreenGui
-
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 4)
-local mStroke = Instance.new("UIStroke", MainFrame)
-mStroke.Color = Color3.fromRGB(85, 85, 115)
-mStroke.Thickness = 1.4
-
-local Header = Instance.new("Frame")
-Header.Name = "Header"
-Header.Size = UDim2.new(1, 0, 0, 30)
-Header.BackgroundColor3 = Color3.fromRGB(32, 32, 46)
-Header.BorderSizePixel = 0
-Header.Active = true
-Header.Parent = MainFrame
-Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 4)
-
-local TitleLbl = Instance.new("TextLabel")
-TitleLbl.Size = UDim2.new(1, -36, 1, 0)
-TitleLbl.Position = UDim2.new(0, 8, 0, 0)
-TitleLbl.BackgroundTransparency = 1
-TitleLbl.Text = "CAPRI FARM"
-TitleLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLbl.Font = Enum.Font.GothamBold
-TitleLbl.TextSize = 11
-TitleLbl.TextXAlignment = Enum.TextXAlignment.Left
-TitleLbl.Parent = Header
-
-local CloseX = Instance.new("TextButton")
-CloseX.Name = "CloseButton"
-CloseX.Size = UDim2.new(0, 22, 0, 20)
-CloseX.Position = UDim2.new(1, -27, 0.5, -10)
-CloseX.BackgroundColor3 = Color3.fromRGB(185, 48, 48)
-CloseX.BorderSizePixel = 0
-CloseX.Text = "X"
-CloseX.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseX.Font = Enum.Font.GothamBold
-CloseX.TextSize = 11
-CloseX.Parent = Header
-Instance.new("UICorner", CloseX).CornerRadius = UDim.new(0, 3)
-
--- Thanh chuyển 3 Tab: Farm, Setting, Mastery
-local TabBar = Instance.new("Frame")
-TabBar.Name = "TabBar"
-TabBar.Size = UDim2.new(1, -10, 0, 24)
-TabBar.Position = UDim2.new(0, 5, 0, 34)
-TabBar.BackgroundTransparency = 1
-TabBar.Parent = MainFrame
-
-local FarmTabBtn = Instance.new("TextButton")
-FarmTabBtn.Size = UDim2.new(1/3, -3, 1, 0)
-FarmTabBtn.Position = UDim2.new(0, 0, 0, 0)
-FarmTabBtn.BorderSizePixel = 0
-FarmTabBtn.Font = Enum.Font.GothamBold
-FarmTabBtn.TextSize = 10
-FarmTabBtn.Text = "Farm"
-FarmTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-FarmTabBtn.Parent = TabBar
-Instance.new("UICorner", FarmTabBtn).CornerRadius = UDim.new(0, 3)
-
-local SettingTabBtn = Instance.new("TextButton")
-SettingTabBtn.Size = UDim2.new(1/3, -3, 1, 0)
-SettingTabBtn.Position = UDim2.new(1/3, 1.5, 0, 0)
-SettingTabBtn.BorderSizePixel = 0
-SettingTabBtn.Font = Enum.Font.GothamBold
-SettingTabBtn.TextSize = 10
-SettingTabBtn.Text = "Setting"
-SettingTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-SettingTabBtn.Parent = TabBar
-Instance.new("UICorner", SettingTabBtn).CornerRadius = UDim.new(0, 3)
-
-local MasteryTabBtn = Instance.new("TextButton")
-MasteryTabBtn.Size = UDim2.new(1/3, -3, 1, 0)
-MasteryTabBtn.Position = UDim2.new(2/3, 3, 0, 0)
-MasteryTabBtn.BorderSizePixel = 0
-MasteryTabBtn.Font = Enum.Font.GothamBold
-MasteryTabBtn.TextSize = 10
-MasteryTabBtn.Text = "Mastery"
-MasteryTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-MasteryTabBtn.Parent = TabBar
-Instance.new("UICorner", MasteryTabBtn).CornerRadius = UDim.new(0, 3)
-
-local function CreateTabPage(name)
-    local frame = Instance.new("ScrollingFrame")
-    frame.Name = name .. "Page"
-    frame.Size = UDim2.new(1, -10, 1, -64)
-    frame.Position = UDim2.new(0, 5, 0, 62)
-    frame.BackgroundTransparency = 1
-    frame.BorderSizePixel = 0
-    frame.ScrollBarThickness = 3
-    frame.CanvasSize = UDim2.new(0, 0, 0, 480)
-    frame.Parent = MainFrame
-
-    local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 4)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = frame
-
-    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        frame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
-    end)
-
-    return frame
-end
-
-local FarmPage = CreateTabPage("Farm")
-local SettingPage = CreateTabPage("Setting")
-local MasteryPage = CreateTabPage("Mastery")
-
-local function SwitchTab(tabName)
-    FarmPage.Visible = (tabName == "Farm")
-    SettingPage.Visible = (tabName == "Setting")
-    MasteryPage.Visible = (tabName == "Mastery")
-
-    FarmTabBtn.BackgroundColor3 = (tabName == "Farm") and Color3.fromRGB(52, 95, 185) or Color3.fromRGB(34, 34, 46)
-    SettingTabBtn.BackgroundColor3 = (tabName == "Setting") and Color3.fromRGB(52, 95, 185) or Color3.fromRGB(34, 34, 46)
-    MasteryTabBtn.BackgroundColor3 = (tabName == "Mastery") and Color3.fromRGB(52, 95, 185) or Color3.fromRGB(34, 34, 46)
-end
-
-FarmTabBtn.MouseButton1Click:Connect(function()
-    SwitchTab("Farm")
-end)
-SettingTabBtn.MouseButton1Click:Connect(function()
-    SwitchTab("Setting")
-end)
-MasteryTabBtn.MouseButton1Click:Connect(function()
-    SwitchTab("Mastery")
-end)
-SwitchTab("Farm")
-
--- Hàm kéo thả tự do cho Icon tròn và GUI chữ nhật
-local function MakeDraggable(dragHandle, moveTarget, onClickIfNotDragged)
-    local dragging = false
-    local moved = false
-    local dragInput = nil
-    local dragStart = nil
-    local startPos = nil
-
-    dragHandle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            moved = false
-            dragStart = input.Position
-            startPos = moveTarget.Position
-
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    local wasMoved = moved
-                    dragging = false
-                    if not wasMoved and onClickIfNotDragged then
-                        onClickIfNotDragged()
-                    end
-                end
-            end)
-        end
-    end)
-
-    dragHandle.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input == dragInput then
-            local delta = input.Position - dragStart
-            if delta.Magnitude > 5 then
-                moved = true
+    task.spawn(function()
+        local folders = {
+            ReplicatedStorage:FindFirstChild("Util"),
+            ReplicatedStorage:FindFirstChild("Common"),
+            ReplicatedStorage:FindFirstChild("Remotes"),
+            ReplicatedStorage:FindFirstChild("Assets"),
+            ReplicatedStorage:FindFirstChild("FX"),
+        }
+        local function inspect(child)
+            if child:IsA("RemoteEvent") and child:GetAttribute("Id") then
+                State.FoundRemote = child
+                State.FoundRemoteId = child:GetAttribute("Id")
             end
-            moveTarget.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
+        end
+        for _, folder in ipairs(folders) do
+            if folder then
+                for _, child in ipairs(folder:GetChildren()) do
+                    inspect(child)
+                end
+                folder.ChildAdded:Connect(inspect)
+            end
         end
     end)
-end
 
-local function SetMenuOpen(open)
-    MainFrame.Visible = open
-    ToggleBtn.Text = open and "CAPRI" or "MỞ"
-    tStroke.Color = open and Color3.fromRGB(65, 200, 115) or Color3.fromRGB(235, 64, 92)
-end
+    local function GetMobTargets()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local enemies = Workspace:FindFirstChild("Enemies")
+        if not root or not enemies then return {} end
 
-MakeDraggable(ToggleBtn, ToggleBtn, function()
-    SetMenuOpen(not MainFrame.Visible)
-end)
-MakeDraggable(Header, MainFrame)
-MakeDraggable(MainFrame, MainFrame)
-
-CloseX.MouseButton1Click:Connect(function()
-    SetMenuOpen(false)
-end)
-
-UserInputService.InputBegan:Connect(function(input, gp)
-    if not gp and input.KeyCode == Enum.KeyCode.RightShift then
-        SetMenuOpen(not MainFrame.Visible)
-    end
-end)
-
--- Helper tạo nút nhỏ gọn trong từng Tab
-local function CreateRowBuilder(parentFrame)
-    local idxOrder = 0
-    local function nextOrd()
-        idxOrder += 1
-        return idxOrder
-    end
-
-    local function AddToggle(labelText, initial, onToggle)
-        local btn = Instance.new("TextButton")
-        btn.LayoutOrder = nextOrd()
-        btn.Size = UDim2.new(1, 0, 0, 24)
-        btn.BorderSizePixel = 0
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 10
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.Parent = parentFrame
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 3)
-
-        local state = initial
-        local function paint()
-            btn.BackgroundColor3 = state and Color3.fromRGB(40, 145, 75) or Color3.fromRGB(36, 36, 48)
-            btn.Text = string.format("%s: %s", labelText, state and "BẬT" or "TẮT")
+        local list = {}
+        local myPos = root.Position
+        for _, model in ipairs(enemies:GetChildren()) do
+            local tRoot = model:FindFirstChild("HumanoidRootPart")
+            local tHum = model:FindFirstChildOfClass("Humanoid")
+            if tRoot and tHum and tHum.Health > 0 then
+                if (tRoot.Position - myPos).Magnitude < M1_RANGE then
+                    table.insert(list, {
+                        Model = model,
+                        Root = tRoot,
+                        Head = model:FindFirstChild("Head") or tRoot,
+                    })
+                end
+            end
         end
-        paint()
+        return list
+    end
 
-        btn.MouseButton1Click:Connect(function()
-            state = not state
-            paint()
-            onToggle(state)
+    local function PerformMobAttack(useEncrypted)
+        local char = LocalPlayer.Character
+        if not char then return end
+        local hasTool = char:FindFirstChildOfClass("Tool") or char:FindFirstChild("EquippedWeapon")
+        if not hasTool then return end
+
+        local targets = GetMobTargets()
+        if #targets == 0 then return end
+
+        local hitList = {}
+        for _, target in ipairs(targets) do
+            table.insert(hitList, { target.Model, target.Root })
+        end
+
+        pcall(function()
+            RegisterAttack:FireServer(0)
+            RegisterHit:FireServer(targets[1].Head, hitList)
         end)
 
-        return btn, function(newVal)
-            if state ~= newVal then
-                state = newVal
-                paint()
-            end
-        end
-    end
-
-    local function AddButton(labelText, color, onClick)
-        local btn = Instance.new("TextButton")
-        btn.LayoutOrder = nextOrd()
-        btn.Size = UDim2.new(1, 0, 0, 24)
-        btn.BackgroundColor3 = color or Color3.fromRGB(52, 85, 165)
-        btn.BorderSizePixel = 0
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 10
-        btn.Text = labelText
-        btn.Parent = parentFrame
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 3)
-        btn.MouseButton1Click:Connect(onClick)
-        return btn
-    end
-
-    local function AddCycle(prefix, options, startIdx, onChange)
-        local cur = startIdx or 1
-        local btn = Instance.new("TextButton")
-        btn.LayoutOrder = nextOrd()
-        btn.Size = UDim2.new(1, 0, 0, 24)
-        btn.BackgroundColor3 = Color3.fromRGB(42, 42, 56)
-        btn.BorderSizePixel = 0
-        btn.TextColor3 = Color3.fromRGB(240, 240, 255)
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 10
-        btn.Parent = parentFrame
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 3)
-
-        local function refresh()
-            btn.Text = string.format("%s: %s", prefix, tostring(options[cur]))
-        end
-        refresh()
-
-        btn.MouseButton1Click:Connect(function()
-            cur += 1
-            if cur > #options then cur = 1 end
-            refresh()
-            onChange(options[cur])
-        end)
-
-        return btn, function(newOpts, selectedNameOrValue)
-            if type(newOpts) == "table" then
-                options = (#newOpts > 0) and newOpts or {"Chưa có quái"}
-            end
-            cur = 1
-            if selectedNameOrValue ~= nil then
-                for i, v in ipairs(options) do
-                    if v == selectedNameOrValue then
-                        cur = i
-                        break
-                    end
-                end
-            end
-            refresh()
-        end
-    end
-
-    local function AddSkillKeyRow(prefixLabel, keyMap, keyList, onKeysChanged)
-        local keys = keyList or FRUIT_KEYS
-        local row = Instance.new("Frame")
-        row.LayoutOrder = nextOrd()
-        row.Size = UDim2.new(1, 0, 0, 24)
-        row.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
-        row.BorderSizePixel = 0
-        row.Parent = parentFrame
-        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 3)
-
-        local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(0.42, 0, 1, 0)
-        lbl.Position = UDim2.new(0, 6, 0, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = prefixLabel
-        lbl.TextColor3 = Color3.fromRGB(220, 225, 240)
-        lbl.Font = Enum.Font.GothamBold
-        lbl.TextSize = 10
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-        lbl.Parent = row
-
-        local keyBtns = {}
-        local count = #keys
-        for i, keyName in ipairs(keys) do
-            local kBtn = Instance.new("TextButton")
-            local widthScale = 0.56 / count
-            kBtn.Size = UDim2.new(widthScale, -3, 0, 20)
-            kBtn.Position = UDim2.new(0.43 + (i - 1) * widthScale, 1, 0.5, -10)
-            kBtn.BorderSizePixel = 0
-            kBtn.Font = Enum.Font.GothamBold
-            kBtn.TextSize = 10
-            kBtn.Text = keyName
-            kBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            kBtn.Parent = row
-            Instance.new("UICorner", kBtn).CornerRadius = UDim.new(0, 3)
-
-            local function paintKey()
-                local active = keyMap[keyName] == true
-                kBtn.BackgroundColor3 = active and Color3.fromRGB(40, 145, 75) or Color3.fromRGB(46, 46, 62)
-            end
-            paintKey()
-
-            kBtn.MouseButton1Click:Connect(function()
-                keyMap[keyName] = not (keyMap[keyName] == true)
-                paintKey()
-                if onKeysChanged then
-                    onKeysChanged()
-                end
+        if useEncrypted and State.FoundRemote and State.FoundRemoteId then
+            pcall(function()
+                local seedVal = RemoteSeed and RemoteSeed:InvokeServer() or 1
+                local encId = bit32.bxor(State.FoundRemoteId + 909090, seedVal * 2)
+                local rawName = "RE/RegisterHit"
+                local shift = math.floor(Workspace:GetServerTimeNow() / 10 % 10) + 1
+                local encName = string.gsub(rawName, ".", function(c)
+                    return string.char(bit32.bxor(string.byte(c), shift))
+                end)
+                State.FoundRemote:FireServer(encName, encId, targets[1].Head, hitList)
             end)
-
-            keyBtns[keyName] = paintKey
         end
+    end
 
-        return function()
-            for _, paintFn in pairs(keyBtns) do
-                paintFn()
+    task.spawn(function()
+        while true do
+            if not _G.FastAttackMobs then
+                task.wait(0.3)
+                continue
             end
+            local t0 = tick()
+            pcall(PerformMobAttack, _G.FastAttackMode ~= "Mode 1")
+            task.wait(math.max(0.05 - (tick() - t0), 0.001))
         end
-    end
+    end)
 
-    local function AddLabel(txt, height)
-        local lbl = Instance.new("TextLabel")
-        lbl.LayoutOrder = nextOrd()
-        lbl.Size = UDim2.new(1, 0, 0, height or 24)
-        lbl.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
-        lbl.BorderSizePixel = 0
-        lbl.TextColor3 = Color3.fromRGB(210, 220, 235)
-        lbl.Font = Enum.Font.Gotham
-        lbl.TextSize = 10
-        lbl.TextWrapped = true
-        lbl.Text = txt
-        lbl.Parent = parentFrame
-        Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 3)
-        return lbl
-    end
+    MainTab:Dropdown({
+        Title = "Fast Attack Mode",
+        Values = { "Mode 1", "Mode 2" },
+        Value = _G.FastAttackMode,
+        Callback = Bind("FastAttackMode"),
+    })
 
-    return {
-        Toggle = AddToggle,
-        Button = AddButton,
-        Cycle = AddCycle,
-        SkillRow = AddSkillKeyRow,
-        Label = AddLabel
+    MainTab:Toggle({
+        Title = "Fast Attack Mobs",
+        Value = _G.FastAttackMobs,
+        Callback = Bind("FastAttackMobs"),
+    })
+end
+
+-- ==================== 2. GUN M1 MOBS ====================
+do
+    local Net = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net")
+    local ShootGunEvent = Net:WaitForChild("RE/ShootGunEvent")
+    local Validator2 = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Validator2")
+    local shootFunc, idx, dragonReady = nil, {}, false
+
+    local LIMB_PARTS = {
+        "Head", "UpperTorso", "LowerTorso",
+        "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm",
+        "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg",
+        "HumanoidRootPart",
     }
+    local VALID_SEA_ENEMIES = {
+        "Terrorshark", "Shark", "Piranha",
+        "Fish Crew Member", "Haunted Crew Member",
+        "FishBoat", "PirateBrigade", "PirateGrandBrigade",
+    }
+
+    local function getRandomLimb(character)
+        if not character then return nil end
+        local parts = {}
+        for _, name in ipairs(LIMB_PARTS) do
+            local p = character:FindFirstChild(name)
+            if p and p:IsA("BasePart") then
+                parts[#parts + 1] = p
+            end
+        end
+        return #parts > 0 and parts[math.random(1, #parts)] or character:FindFirstChild("HumanoidRootPart")
+    end
+
+    local function initDragon()
+        if dragonReady then return end
+        local ok = pcall(function()
+            local cc = require(ReplicatedStorage:WaitForChild("Controllers"):WaitForChild("CombatController"))
+            for _, v in ipairs(debug.getupvalues(cc.Attack)) do
+                if type(v) == "function" then
+                    for i, uv in ipairs(debug.getupvalues(v)) do
+                        if uv == 727595 then
+                            shootFunc = v
+                            idx = {
+                                u25 = i - 3, u21 = i - 2, u24 = i - 1,
+                                u20 = i, u22 = i + 1, u23 = i + 2, u26 = i + 3,
+                            }
+                            break
+                        end
+                    end
+                    if shootFunc then break end
+                end
+            end
+        end)
+        if ok and shootFunc then
+            dragonReady = true
+        end
+    end
+
+    local function fireShot(pos, hit)
+        if not shootFunc then return end
+        local u20 = debug.getupvalue(shootFunc, idx.u20)
+        local u21 = debug.getupvalue(shootFunc, idx.u21)
+        local u22 = debug.getupvalue(shootFunc, idx.u22)
+        local u23 = debug.getupvalue(shootFunc, idx.u23)
+        local u24 = debug.getupvalue(shootFunc, idx.u24)
+        local u25 = debug.getupvalue(shootFunc, idx.u25)
+        local u26 = debug.getupvalue(shootFunc, idx.u26)
+
+        local u79 = u25 * u21
+        local u80 = (u24 * u21 + u25 * u20) % u22
+        u80 = (u80 * u22 + u79) % u23
+        u24 = math.floor(u80 / u22)
+        u25 = u80 - u24 * u22
+        u26 = u26 + 1
+
+        debug.setupvalue(shootFunc, idx.u24, u24)
+        debug.setupvalue(shootFunc, idx.u25, u25)
+        debug.setupvalue(shootFunc, idx.u26, u26)
+
+        Validator2:FireServer(math.floor(u80 / u23 * 16777215), u26)
+        ShootGunEvent:FireServer(pos, { hit })
+    end
+
+    local function getAllPlayerBoatModels()
+        local models = {}
+        local boats = Workspace:FindFirstChild("Boats")
+        if boats then
+            for _, v in ipairs(boats:GetChildren()) do
+                local owner = v:FindFirstChild("Owner")
+                if owner and owner.Value and tostring(owner.Value) ~= "" then
+                    models[v.Name] = true
+                end
+            end
+        end
+        return models
+    end
+
+    local ATTACK_RANGE = 450
+    local function getClosestMobTarget()
+        local char = LocalPlayer.Character
+        local myHRP = char and char:FindFirstChild("HumanoidRootPart")
+        if not myHRP then return nil end
+
+        local best, bestDist = nil, ATTACK_RANGE
+        local playerBoats = getAllPlayerBoatModels()
+
+        local seaBeasts = Workspace:FindFirstChild("SeaBeasts")
+        if seaBeasts then
+            for _, e in ipairs(seaBeasts:GetChildren()) do
+                local hrp = e:FindFirstChild("HumanoidRootPart")
+                local hp = e:FindFirstChild("Health")
+                if hrp and hp and hp:IsA("ValueBase") and hp.Value > 0 then
+                    local seg = e:FindFirstChild("Leviathan Segment")
+                    if seg then
+                        local d = (seg.Position - myHRP.Position).Magnitude
+                        if d < bestDist then bestDist, best = d, seg end
+                    end
+                    local d = (hrp.Position - myHRP.Position).Magnitude
+                    if d < bestDist then
+                        bestDist, best = d, getRandomLimb(e) or hrp
+                    end
+                end
+            end
+        end
+
+        local enemies = Workspace:FindFirstChild("Enemies")
+        if enemies then
+            for _, e in ipairs(enemies:GetChildren()) do
+                if table.find(VALID_SEA_ENEMIES, e.Name) and not playerBoats[e.Name] then
+                    local engine = e:FindFirstChild("Engine")
+                    if engine and e:FindFirstChild("VehicleSeat") then
+                        local hp = e:FindFirstChild("Health")
+                        if hp and hp:IsA("ValueBase") and hp.Value > 0 then
+                            local d = (engine.Position - myHRP.Position).Magnitude
+                            if d < bestDist then bestDist, best = d, engine end
+                        end
+                    else
+                        local hrp = e:FindFirstChild("HumanoidRootPart")
+                        local hum = e:FindFirstChildOfClass("Humanoid")
+                        if hrp and hum and hum.Health > 0 then
+                            local d = (hrp.Position - myHRP.Position).Magnitude
+                            if d < bestDist then
+                                bestDist, best = d, getRandomLimb(e) or hrp
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        local function scanNPC(node, depth)
+            if not node then return end
+            for _, enemy in ipairs(node:GetChildren()) do
+                local eHum = enemy:FindFirstChildOfClass("Humanoid")
+                local eRoot = enemy:FindFirstChild("HumanoidRootPart")
+                if eRoot and eHum and eHum.Health > 0 then
+                    local d = (eRoot.Position - myHRP.Position).Magnitude
+                    if d < bestDist then
+                        bestDist, best = d, getRandomLimb(enemy) or eRoot
+                    end
+                elseif depth < 3 and not enemy:IsA("BasePart") then
+                    scanNPC(enemy, depth + 1)
+                end
+            end
+        end
+
+        scanNPC(Workspace:FindFirstChild("Enemies"), 0)
+        scanNPC(Workspace:FindFirstChild("SeaEvents"), 0)
+        return best
+    end
+
+    task.spawn(function()
+        while not dragonReady do
+            initDragon()
+            task.wait(1)
+        end
+        while task.wait() do
+            if not _G.GunM1Mobs then continue end
+            local char = LocalPlayer.Character
+            local tool = char and char:FindFirstChildOfClass("Tool")
+            if tool and tool.Name == "Dragonstorm" then
+                local target = getClosestMobTarget()
+                if target then
+                    fireShot(target.Position, target)
+                end
+            end
+        end
+    end)
+
+    MainTab:Toggle({
+        Title = "Gun M1 Mobs",
+        Value = _G.GunM1Mobs,
+        Callback = Bind("GunM1Mobs"),
+    })
 end
 
-local FarmUI = CreateRowBuilder(FarmPage)
-local SettingUI = CreateRowBuilder(SettingPage)
-local MasteryUI = CreateRowBuilder(MasteryPage)
-
--- ==================== TAB FARM ====================
-local weaponOpts = {"Melee", "Sword", "Gun", "Blox Fruit"}
-local startWeaponIdx = table.find(weaponOpts, Config.WeaponType) or 1
-local _, SetWeaponCycle = FarmUI.Cycle("Vũ Khí", weaponOpts, startWeaponIdx, function(w)
-    Config.WeaponType = w
-    getgenv().Config.HoldWeapon = w
-end)
-
-local StatusBox = FarmUI.Label("Quái đã chọn: Chưa có | Bấm 'Quét Đảo' để lấy danh sách.", 26)
-
-local _, UpdateMobCycle = FarmUI.Cycle("Quái Đã Chọn", {"Chưa quét"}, 1, function(mobName)
-    if mobName ~= "Chưa quét" and mobName ~= "Chưa có quái" then
-        Config.SelectedMob = mobName
-        StatusBox.Text = "Quái đã chọn: " .. mobName
-    end
-end)
-
-local function DoScan()
-    local list, counts = ScanMobs()
-    if #list > 0 then
-        if not Config.SelectedMob or not table.find(list, Config.SelectedMob) then
-            Config.SelectedMob = list[1]
+-- ==================== 3. AUTO V4 ====================
+do
+    local function TurnOnV4()
+        local char = LocalPlayer.Character
+        if not char then return end
+        local energy = char:FindFirstChild("RaceEnergy")
+        local transformed = char:FindFirstChild("RaceTransformed")
+        if not energy or energy.Value < 1 or not transformed or transformed.Value then
+            return
         end
-        UpdateMobCycle(list, Config.SelectedMob)
+        local awakening = (LocalPlayer.Backpack and LocalPlayer.Backpack:FindFirstChild("Awakening"))
+            or char:FindFirstChild("Awakening")
+        if awakening and awakening:FindFirstChild("RemoteFunction") then
+            pcall(function()
+                awakening.RemoteFunction:InvokeServer(true)
+            end)
+        end
+    end
+
+    task.spawn(function()
+        while true do
+            if _G.AutoV4 then
+                pcall(TurnOnV4)
+            end
+            task.wait(1)
+        end
+    end)
+
+    MainTab:Toggle({
+        Title = "Auto V4",
+        Value = _G.AutoV4,
+        Callback = Bind("AutoV4"),
+    })
+end
+
+-- ==================== 4. FARM, BRING, SETTING & MASTERY UI ====================
+local MobDropdown = nil
+local AutoSelectedToggle = nil
+local AutoNearToggle = nil
+
+local function RefreshMobList()
+    local list, counts = ScanMobs()
+    local values = (#list > 0) and list or { "Chưa có quái" }
+    if #list > 0 then
+        if not _G.SelectedMob or not table.find(list, _G.SelectedMob) then
+            _G.SelectedMob = list[1]
+        end
+    else
+        _G.SelectedMob = nil
+    end
+
+    if MobDropdown then
+        pcall(function()
+            if MobDropdown.Refresh then
+                MobDropdown:Refresh(values, _G.SelectedMob or values[1])
+            elseif MobDropdown.SetValues then
+                MobDropdown:SetValues(values)
+                if _G.SelectedMob then
+                    MobDropdown:Set(_G.SelectedMob)
+                end
+            end
+        end)
+    end
+
+    if #list > 0 then
         local summary = {}
         for i = 1, math.min(#list, 3) do
             local n = list[i]
             table.insert(summary, n .. " (" .. tostring(counts[n]) .. ")")
         end
-        StatusBox.Text = "Chọn: " .. tostring(Config.SelectedMob) .. " | " .. table.concat(summary, ", ")
-    else
-        Config.SelectedMob = nil
-        UpdateMobCycle({"Chưa có quái"}, nil)
-        StatusBox.Text = "Không tìm thấy quái sống gần đây. Hãy lại gần đảo rồi bấm Quét Đảo."
+        pcall(function()
+            WindUI:Notify({
+                Title = "Quét Đảo",
+                Content = "Chọn: " .. tostring(_G.SelectedMob) .. " | " .. table.concat(summary, ", "),
+                Duration = 3,
+            })
+        end)
     end
 end
 
-FarmUI.Button("Quét Đảo Ngay (Scan Mobs)", Color3.fromRGB(50, 95, 185), DoScan)
+MainTab:Dropdown({
+    Title = "Vũ Khí Chính",
+    Values = { "Melee", "Sword", "Gun", "Blox Fruit" },
+    Value = _G.WeaponType,
+    Callback = Bind("WeaponType"),
+})
 
-local _, SetAutoSelectedUI = FarmUI.Toggle("Auto Farm Quái Đã Chọn", false, function(val)
-    Config.AutoSelected = val
-    if val then
-        Config.AutoNear = false
-    end
-    if not (Config.AutoSelected or Config.AutoNear) then
-        StopMovement()
-    end
-end)
-
-local _, SetAutoNearUI = FarmUI.Toggle("Auto Farm Near", false, function(val)
-    Config.AutoNear = val
-    if val then
-        Config.AutoSelected = false
-    end
-    if not (Config.AutoSelected or Config.AutoNear) then
-        StopMovement()
-    end
-end)
-
-local _, SetAutoV4UI = FarmUI.Toggle("Auto V4", Config.AutoV4, function(val)
-    Config.AutoV4 = val
-    getgenv().Config.AutoV4 = val
-end)
-
-local _, SetBringUI = FarmUI.Toggle("Gom Quái (Bring Mobs)", Config.BringEnabled, function(val)
-    Config.BringEnabled = val
-    if not val then
-        ClearVisualHitboxes()
-    end
-end)
-
-local bringModeOpts = {"Mixed / All", "Same Name"}
-local startBringModeIdx = table.find(bringModeOpts, Config.BringMode) or 1
-local _, SetBringModeCycle = FarmUI.Cycle("Chế Độ Gom", bringModeOpts, startBringModeIdx, function(mode)
-    Config.BringMode = mode
-end)
-
--- ==================== TAB SETTING ====================
-local _, SetSilentNPCUI = SettingUI.Toggle("Silent NPC", Config.SilentNPCEnabled, function(val)
-    Config.SilentNPCEnabled = val
-    if not val then
-        currentNPCTargetPart = nil
-    else
-        currentNPCTargetPart = SelectSilentNPCTarget()
-    end
-end)
-
-local heightOpts = {12, 18, 24, 32, 40}
-local startHeightIdx = table.find(heightOpts, Config.FarmHeight) or 3
-local _, SetHeightCycle = SettingUI.Cycle("Độ Cao Farm Quái", heightOpts, startHeightIdx, function(h)
-    Config.FarmHeight = h
-end)
-
-local bringRangeOpts = {150, 250, 350, 500, 700}
-local startBringRangeIdx = table.find(bringRangeOpts, Config.BringRange) or 3
-local _, SetBringRangeCycle = SettingUI.Cycle("Phạm Vi Gom Quái", bringRangeOpts, startBringRangeIdx, function(rng)
-    Config.BringRange = rng
-end)
-
-local nearRangeOpts = {400, 700, 1200, 2000}
-local startNearRangeIdx = table.find(nearRangeOpts, Config.NearRange) or 2
-local _, SetNearRangeCycle = SettingUI.Cycle("Bán Kính Near", nearRangeOpts, startNearRangeIdx, function(rng)
-    Config.NearRange = rng
-    Config.SilentMaxDist = rng
-end)
-
-local speedOpts = {200, 350, 500, 800}
-local startSpeedIdx = table.find(speedOpts, Config.TweenSpeed) or 2
-local _, SetSpeedCycle = SettingUI.Cycle("Tốc Độ Di Chuyển", speedOpts, startSpeedIdx, function(spd)
-    Config.TweenSpeed = spd
-end)
-
-local _, SetVisualHitboxUI = SettingUI.Toggle("Hiện Visual Hitbox", Config.VisualHitbox, function(val)
-    Config.VisualHitbox = val
-    if not val then
-        ClearVisualHitboxes()
-    end
-end)
-
-local SaveStatusLbl = SettingUI.Label("Trạng thái lưu: Đã áp dụng cấu hình hiện tại.", 24)
-
-SettingUI.Button("Lưu Setting", Color3.fromRGB(45, 135, 85), function()
-    local ok = SaveSettings()
-    if ok then
-        SaveStatusLbl.Text = "Đã lưu setting thành công (" .. os.date("%H:%M:%S") .. ")."
-    else
-        SaveStatusLbl.Text = "Lưu bộ nhớ tạm thành công (executor không hỗ trợ ghi file)."
-    end
-end)
-
--- ==================== TAB MASTERY ====================
-MasteryUI.Label("Melee (Z,X,C), Sword (Z,X), Gun (Z,X), Fruit (Z,X,C,V) tự đổi vũ khí & xả chiêu khi quái <= % máu.", 30)
-
-local hpPercentOpts = {100, 85, 70, 50, 35, 25, 15}
-
--- Melee Mastery (Z, X, C)
-local _, SetMeleeMasteryUI = MasteryUI.Toggle("Mastery Melee Xài Chiêu", Config.MeleeMasteryEnabled, function(val)
-    Config.MeleeMasteryEnabled = val
-end)
-
-local startMeleeHPIdx = table.find(hpPercentOpts, Config.MeleeSkillHP) or 6
-local _, SetMeleeHPCycle = MasteryUI.Cycle("% Máu Quái (Melee)", hpPercentOpts, startMeleeHPIdx, function(pct)
-    Config.MeleeSkillHP = pct
-end)
-
-local RefreshMeleeKeyUI = MasteryUI.SkillRow("Phím Melee:", Config.MeleeSelectedKeys, MELEE_KEYS, SyncGlobalSkillLists)
-
--- Sword Mastery (Z, X)
-local _, SetSwordMasteryUI = MasteryUI.Toggle("Mastery Sword Xài Chiêu", Config.SwordMasteryEnabled, function(val)
-    Config.SwordMasteryEnabled = val
-end)
-
-local startSwordHPIdx = table.find(hpPercentOpts, Config.SwordSkillHP) or 6
-local _, SetSwordHPCycle = MasteryUI.Cycle("% Máu Quái (Sword)", hpPercentOpts, startSwordHPIdx, function(pct)
-    Config.SwordSkillHP = pct
-end)
-
-local RefreshSwordKeyUI = MasteryUI.SkillRow("Phím Sword:", Config.SwordSelectedKeys, SHORT_WEAPON_KEYS, SyncGlobalSkillLists)
-
--- Gun Mastery (Z, X)
-local _, SetGunMasteryUI = MasteryUI.Toggle("Mastery Gun Xài Chiêu", Config.GunMasteryEnabled, function(val)
-    Config.GunMasteryEnabled = val
-end)
-
-local startGunHPIdx = table.find(hpPercentOpts, Config.GunSkillHP) or 6
-local _, SetGunHPCycle = MasteryUI.Cycle("% Máu Quái (Gun)", hpPercentOpts, startGunHPIdx, function(pct)
-    Config.GunSkillHP = pct
-end)
-
-local RefreshGunKeyUI = MasteryUI.SkillRow("Phím Gun:", Config.GunSelectedKeys, SHORT_WEAPON_KEYS, SyncGlobalSkillLists)
-
--- Fruit Mastery (Z, X, C, V)
-local _, SetFruitMasteryUI = MasteryUI.Toggle("Mastery Fruit Xài Chiêu", Config.FruitMasteryEnabled, function(val)
-    Config.FruitMasteryEnabled = val
-end)
-
-local startFruitHPIdx = table.find(hpPercentOpts, Config.FruitSkillHP) or 6
-local _, SetFruitHPCycle = MasteryUI.Cycle("% Máu Quái (Fruit)", hpPercentOpts, startFruitHPIdx, function(pct)
-    Config.FruitSkillHP = pct
-end)
-
-local RefreshFruitKeyUI = MasteryUI.SkillRow("Phím Fruit:", Config.FruitSelectedKeys, FRUIT_KEYS, SyncGlobalSkillLists)
-
--- Đồng bộ giao diện theo cấu hình đã nạp
-SetWeaponCycle(weaponOpts, Config.WeaponType)
-SetAutoV4UI(Config.AutoV4)
-SetSilentNPCUI(Config.SilentNPCEnabled)
-SetBringUI(Config.BringEnabled)
-SetBringModeCycle(bringModeOpts, Config.BringMode)
-SetHeightCycle(heightOpts, Config.FarmHeight)
-SetBringRangeCycle(bringRangeOpts, Config.BringRange)
-SetNearRangeCycle(nearRangeOpts, Config.NearRange)
-SetSpeedCycle(speedOpts, Config.TweenSpeed)
-SetVisualHitboxUI(Config.VisualHitbox)
-SetMeleeMasteryUI(Config.MeleeMasteryEnabled)
-SetMeleeHPCycle(hpPercentOpts, Config.MeleeSkillHP)
-RefreshMeleeKeyUI()
-SetSwordMasteryUI(Config.SwordMasteryEnabled)
-SetSwordHPCycle(hpPercentOpts, Config.SwordSkillHP)
-RefreshSwordKeyUI()
-SetGunMasteryUI(Config.GunMasteryEnabled)
-SetGunHPCycle(hpPercentOpts, Config.GunSkillHP)
-RefreshGunKeyUI()
-SetFruitMasteryUI(Config.FruitMasteryEnabled)
-SetFruitHPCycle(hpPercentOpts, Config.FruitSkillHP)
-RefreshFruitKeyUI()
-
--- Đồng bộ trạng thái nút UI khi bật chéo Selected / Near
-task.spawn(function()
-    while task.wait(0.25) do
-        SetAutoSelectedUI(Config.AutoSelected)
-        SetAutoNearUI(Config.AutoNear)
-    end
-end)
-
--- Vòng lặp Auto V4
-task.spawn(function()
-    while task.wait(0.25) do
-        if Config.AutoV4 then
-            TryActivateV4()
+MobDropdown = MainTab:Dropdown({
+    Title = "Quái Đã Chọn",
+    Values = _G.SelectedMob and { _G.SelectedMob } or { "Chưa quét" },
+    Value = _G.SelectedMob or "Chưa quét",
+    Callback = function(v)
+        if v and v ~= "Chưa quét" and v ~= "Chưa có quái" then
+            _G.SelectedMob = v
+            SaveConfig()
         end
+    end,
+})
+
+MainTab:Button({
+    Title = "Quét Đảo Ngay (Scan Mobs)",
+    Callback = RefreshMobList,
+})
+
+AutoSelectedToggle = MainTab:Toggle({
+    Title = "Auto Farm Quái Đã Chọn",
+    Value = _G.AutoSelected,
+    Callback = function(val)
+        _G.AutoSelected = val
+        if val and _G.AutoNear then
+            _G.AutoNear = false
+            pcall(function()
+                if AutoNearToggle and AutoNearToggle.Set then
+                    AutoNearToggle:Set(false)
+                end
+            end)
+        end
+        if not (_G.AutoSelected or _G.AutoNear) then
+            StopMovement()
+        end
+        SaveConfig()
+    end,
+})
+
+AutoNearToggle = MainTab:Toggle({
+    Title = "Auto Farm Near",
+    Value = _G.AutoNear,
+    Callback = function(val)
+        _G.AutoNear = val
+        if val and _G.AutoSelected then
+            _G.AutoSelected = false
+            pcall(function()
+                if AutoSelectedToggle and AutoSelectedToggle.Set then
+                    AutoSelectedToggle:Set(false)
+                end
+            end)
+        end
+        if not (_G.AutoSelected or _G.AutoNear) then
+            StopMovement()
+        end
+        SaveConfig()
+    end,
+})
+
+MainTab:Toggle({
+    Title = "Gom Quái (Bring Mobs)",
+    Value = _G.BringEnabled,
+    Callback = Bind("BringEnabled", function(val)
+        if not val then
+            ClearVisualHitboxes()
+        end
+    end),
+})
+
+MainTab:Dropdown({
+    Title = "Chế Độ Gom",
+    Values = { "Mixed / All", "Same Name" },
+    Value = _G.BringMode,
+    Callback = Bind("BringMode"),
+})
+
+-- Tab Setting
+SettingTab:Toggle({
+    Title = "Silent NPC",
+    Value = _G.SilentNPCEnabled,
+    Callback = Bind("SilentNPCEnabled", function(val)
+        if not val then
+            currentNPCTargetPart = nil
+        else
+            currentNPCTargetPart = SelectSilentNPCTarget()
+        end
+    end),
+})
+
+SettingTab:Dropdown({
+    Title = "Độ Cao Farm Quái",
+    Values = { "12", "18", "24", "32", "40" },
+    Value = tostring(_G.FarmHeight),
+    Callback = Bind("FarmHeight", function(v)
+        _G.FarmHeight = tonumber(v) or 24
+    end),
+})
+
+SettingTab:Dropdown({
+    Title = "Phạm Vi Gom Quái",
+    Values = { "150", "250", "350", "500", "700" },
+    Value = tostring(_G.BringRange),
+    Callback = Bind("BringRange", function(v)
+        _G.BringRange = tonumber(v) or 350
+    end),
+})
+
+SettingTab:Dropdown({
+    Title = "Bán Kính Near",
+    Values = { "400", "700", "1200", "2000" },
+    Value = tostring(_G.NearRange),
+    Callback = Bind("NearRange", function(v)
+        local n = tonumber(v) or 700
+        _G.NearRange = n
+        _G.SilentMaxDist = n
+    end),
+})
+
+SettingTab:Dropdown({
+    Title = "Tốc Độ Di Chuyển",
+    Values = { "200", "350", "500", "800" },
+    Value = tostring(_G.TweenSpeed),
+    Callback = Bind("TweenSpeed", function(v)
+        _G.TweenSpeed = tonumber(v) or 350
+    end),
+})
+
+SettingTab:Toggle({
+    Title = "Hiện Visual Hitbox",
+    Value = _G.VisualHitbox,
+    Callback = Bind("VisualHitbox", function(val)
+        if not val then
+            ClearVisualHitboxes()
+        end
+    end),
+})
+
+SettingTab:Button({
+    Title = "Lưu Cấu Hình Ngay",
+    Callback = function()
+        SaveConfig()
+        pcall(function()
+            WindUI:Notify({
+                Title = "Capri Menu",
+                Content = "Đã lưu cấu hình vào " .. CONFIG_FILE,
+                Duration = 2.5,
+            })
+        end)
+    end,
+})
+
+-- Tab Mastery
+local hpPercentOpts = { "100", "85", "70", "50", "35", "25", "15" }
+
+local function AddMasterySection(label, enabledKey, hpKey, keysKey, keyList)
+    MasteryTab:Toggle({
+        Title = "Mastery " .. label .. " Xài Chiêu",
+        Value = _G[enabledKey],
+        Callback = Bind(enabledKey),
+    })
+
+    MasteryTab:Dropdown({
+        Title = "% Máu Quái (" .. label .. ")",
+        Values = hpPercentOpts,
+        Value = tostring(_G[hpKey]),
+        Callback = Bind(hpKey, function(v)
+            _G[hpKey] = tonumber(v) or 30
+        end),
+    })
+
+    for _, k in ipairs(keyList) do
+        MasteryTab:Toggle({
+            Title = label .. " Phím " .. k,
+            Value = _G[keysKey][k] == true,
+            Callback = function(val)
+                _G[keysKey][k] = val
+                SyncSkillGlobals()
+                SaveConfig()
+            end,
+        })
     end
-end)
+end
 
--- Quét tự động lần đầu sau khi load
-task.delay(0.5, DoScan)
+AddMasterySection("Melee", "MeleeMasteryEnabled", "MeleeSkillHP", "MeleeSelectedKeys", MELEE_KEYS)
+AddMasterySection("Sword", "SwordMasteryEnabled", "SwordSkillHP", "SwordSelectedKeys", SHORT_WEAPON_KEYS)
+AddMasterySection("Gun", "GunMasteryEnabled", "GunSkillHP", "GunSelectedKeys", SHORT_WEAPON_KEYS)
+AddMasterySection("Fruit", "FruitMasteryEnabled", "FruitSkillHP", "FruitSelectedKeys", FRUIT_KEYS)
 
--- Vòng lặp Auto Farm chính (ổn định vị trí, không rung lắc + Silent NPC + tự đổi vũ khí khi farm Mastery)
+-- Quét quái tự động lần đầu sau khi mở GUI
+task.delay(0.6, RefreshMobList)
+
+-- Vòng lặp Auto Farm quái đã chọn / Auto Farm Near + Bring Mobs + Mastery
 task.spawn(function()
     while task.wait(0.05) do
-        if Config.AutoSelected or Config.AutoNear then
+        if _G.AutoSelected or _G.AutoNear then
             pcall(function()
                 local target = nil
-                if Config.AutoSelected then
-                    target = FindNearestMob(4500, Config.SelectedMob)
-                elseif Config.AutoNear then
-                    target = FindNearestMob(Config.NearRange, nil)
+                if _G.AutoSelected then
+                    target = FindNearestMob(4500, _G.SelectedMob)
+                elseif _G.AutoNear then
+                    target = FindNearestMob(_G.NearRange or 700, nil)
                 end
 
                 if IsAliveMob(target) then
@@ -1631,13 +1364,10 @@ task.spawn(function()
                     activeAnchorPos = anchor
                     local targetName = target.Name
 
-                    while (Config.AutoSelected or Config.AutoNear) and IsAliveMob(target) do
+                    while (_G.AutoSelected or _G.AutoNear) and IsAliveMob(target) do
                         currentFarmTarget = target
                         AutoHaki()
                         BringMobs(anchor, targetName)
-                        if Config.AutoV4 then
-                            TryActivateV4()
-                        end
 
                         local usingMastery = TryMasterySkills(target)
                         if not usingMastery then
@@ -1645,7 +1375,7 @@ task.spawn(function()
                         end
 
                         local hrp = GetHRP()
-                        local hoverPos = anchor + Vector3.new(0, Config.FarmHeight, 0)
+                        local hoverPos = anchor + Vector3.new(0, tonumber(_G.FarmHeight) or 24, 0)
                         if hrp then
                             local distToHover = (hoverPos - hrp.Position).Magnitude
                             if distToHover > 75 then
@@ -1661,14 +1391,11 @@ task.spawn(function()
                         task.wait(0.05)
                     end
 
-                    -- Hết quái hoặc quái vừa chết: trả về vũ khí farm chính
                     currentFarmTarget = nil
-                    isMasterySwitched = false
                     EquipWeapon(GetActiveWeapon())
                 else
                     currentFarmTarget = nil
                     activeAnchorPos = nil
-                    isMasterySwitched = false
                     ClearVisualHitboxes()
                     task.wait(0.25)
                 end
@@ -1676,7 +1403,6 @@ task.spawn(function()
         else
             currentFarmTarget = nil
             activeAnchorPos = nil
-            isMasterySwitched = false
             ClearVisualHitboxes()
             task.wait(0.2)
         end
